@@ -145,11 +145,13 @@
             <tr>
               <th>Ingrediente</th>
               <th class="num">Quantità</th>
-              <th class="num">Peso (g)</th>
               <th class="num">Kcal</th>
-              <th class="num">Prot</th>
-              <th class="num">Grassi</th>
+              <th class="num">Proteine</th>
+              <th class="num">Fat</th>
               <th class="num">Carbo</th>
+              <th class="num">Fibre</th>
+              <th class="num">Sodio</th>
+              <th class="num">Chol</th>
               <th></th>
             </tr>
           </thead>
@@ -162,11 +164,13 @@
                 <td class="num qty-cell">
                   <QuantityInput bind:value={rows[i].quantita} nomeUnita={row.ing.nome_unita} min={0} step={row.ing.peso_unita ? 0.5 : 1} />
                 </td>
-                <td class="num">{grammi.toFixed(0)}</td>
                 <td class="num">{n.kcal.toFixed(0)}</td>
                 <td class="num">{n.proteine.toFixed(1)}</td>
-                <td class="num">{n.grassi.toFixed(1)}</td>
-                <td class="num">{n.carboidrati.toFixed(1)}</td>
+                <td class="num">{n.grassi.toFixed(1)} <span class="sub">({n.saturi.toFixed(1)})</span></td>
+                <td class="num">{n.carboidrati.toFixed(1)} <span class="sub">({n.zuccheri.toFixed(1)})</span></td>
+                <td class="num">{n.fibre.toFixed(1)}</td>
+                <td class="num">{n.sodio.toFixed(0)}</td>
+                <td class="num">{n.colesterolo.toFixed(0)}</td>
                 <td>
                   <button type="button" class="rm-btn" onclick={() => removeRow(i)}>✕</button>
                 </td>
@@ -220,11 +224,12 @@
   .picker-wrap { margin-bottom: 1rem; max-width: 400px; }
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-  th { padding: 0.4rem 0.6rem; background: #f1f3f5; border-bottom: 2px solid #dee2e6; text-align: left; white-space: nowrap; }
-  th.num { text-align: right; }
-  td { padding: 0.4rem 0.6rem; border-bottom: 1px solid #f1f3f5; white-space: nowrap; }
-  td.num { text-align: right; }
-  td.qty-cell { text-align: right; }
+  th { padding: 0.4rem 0.6rem; background: #f1f3f5; border-bottom: 2px solid #dee2e6; text-align: center; vertical-align: middle; white-space: nowrap; }
+  th.num { text-align: center; }
+  td { padding: 0.4rem 0.6rem; border-bottom: 1px solid #f1f3f5; white-space: nowrap; text-align: center; vertical-align: middle; }
+  td.num { text-align: center; }
+  td.qty-cell { text-align: center; }
+  .sub { color: #868e96; font-size: 0.8em; }
   .rm-btn { background: none; border: none; cursor: pointer; color: #868e96; font-size: 0.85rem; padding: 0.2rem 0.4rem; }
   .rm-btn:hover { color: #fa5252; }
   .pie-wrap { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #f1f3f5; }
