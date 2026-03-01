@@ -65,6 +65,7 @@ export interface RicettaFull extends Ricetta {
   preparazione: string; // markdown body
   ingredientiDettaglio: RicettaIngredienteDettaglio[];
   nutrizione: NutritionTotals;
+  extra_nutrienti?: Record<string, { valore: number; unita: string }>; // aggregated from all ingredients
 }
 
 export type RicettaInput = {
@@ -87,6 +88,7 @@ export interface GiornataRicettaDettaglio {
   id: string;
   nome: string;
   nutrizione: NutritionTotals;
+  extra_nutrienti?: Record<string, { valore: number; unita: string }>; // aggregated from all recipe ingredients
 }
 
 export interface GiornataFull extends Giornata {

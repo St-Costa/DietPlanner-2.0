@@ -1,6 +1,6 @@
 import { json } from "../router";
 import * as fs from "../services/fileService";
-import { computeRicettaDettaglio } from "../parsers/nutritionCalc";
+import { computeRicettaDettaglio, computeExtraAgg } from "../parsers/nutritionCalc";
 import type { RicettaInput, RicettaFull, Ingrediente } from "../types";
 
 async function enrichRicetta(
@@ -13,11 +13,13 @@ async function enrichRicetta(
   const ingMap = new Map<string, Ingrediente>(allIng.map((i) => [i.id, i]));
 
   const { dettaglio, totale } = computeRicettaDettaglio(ricetta.ingredienti, ingMap);
+  const extra = computeExtraAgg(ricetta.ingredienti, ingMap);
 
   return {
     ...ricetta,
     ingredientiDettaglio: dettaglio,
     nutrizione: totale,
+    extra_nutrienti: Object.keys(extra).length > 0 ? extra : undefined,
   };
 }
 
@@ -33,7 +35,13 @@ export async function handleRicette(req: Request, url: URL, dataDir: string): Pr
 
     const enriched: RicettaFull[] = all.map((r) => {
       const { dettaglio, totale } = computeRicettaDettaglio(r.ingredienti, ingMap);
-      return { ...r, ingredientiDettaglio: dettaglio, nutrizione: totale };
+      const extra = computeExtraAgg(r.ingredienti, ingMap);
+      return {
+        ...r,
+        ingredientiDettaglio: dettaglio,
+        nutrizione: totale,
+        extra_nutrienti: Object.keys(extra).length > 0 ? extra : undefined,
+      };
     });
     return json(enriched);
   }

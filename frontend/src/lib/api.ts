@@ -76,6 +76,11 @@ export const api = {
       request<GiornataFull>(`/api/giornate/${id}`, { method: "PUT", body: JSON.stringify(body) }),
     delete: (id: string) =>
       request<{ ok: true }>(`/api/giornate/${id}`, { method: "DELETE" }),
+    exportMd: async (id: string): Promise<string> => {
+      const res = await fetch(`/api/giornate/${id}/export-md`);
+      if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => ({})));
+      return res.text();
+    },
   },
 
   slugify: (nome: string, tipo: "ingrediente" | "ricetta" | "giornata") =>

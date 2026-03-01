@@ -10,6 +10,9 @@
   import QuantityInput from "./QuantityInput.svelte";
   import NutritionRow from "./NutritionRow.svelte";
   import MacroPieChart from "./MacroPieChart.svelte";
+  import SpiderChart from "./SpiderChart.svelte";
+  import type { SpiderEntry } from "./SpiderChart.svelte";
+  import { settingsStore, VITAMINE_DEF, MINERALI_DEF } from "../stores/settings";
   import type { RicettaFull, RicettaIngrediente, Ingrediente, NutritionTotals } from "../types";
 
   let {
@@ -25,6 +28,11 @@
   let error = $state<string | null>(null);
   let loading = $state(false);
   let deleteConfirm = $state(false);
+
+  // Settings modal state
+  let settingsOpen = $state(false);
+  let editVitamine = $state<Record<string, string>>({});
+  let editMinerali = $state<Record<string, string>>({});
 
   // Ingredient rows: { ing, quantita }
   type Row = { ing: Ingrediente; quantita: number };
@@ -70,6 +78,78 @@
     });
     return sumNutrition(parts);
   });
+
+  // Aggregate extra_nutrienti (vitamins, minerals) from all rows scaled by grams
+  function computeExtraAgg(): Record<string, number> {
+    const agg: Record<string, number> = {};
+    for (const row of rows) {
+      const grammi = toGrams({ id: row.ing.id, quantita: row.quantita, unita: row.ing.nome_unita ?? "g" }, row.ing);
+      for (const [key, { valore }] of Object.entries(row.ing.extra_nutrienti ?? {})) {
+        agg[key] = (agg[key] ?? 0) + (valore * grammi) / 100;
+      }
+    }
+    return agg;
+  }
+
+  let hasExtraData = $derived(() =>
+    rows.some((r) => r.ing.extra_nutrienti && Object.keys(r.ing.extra_nutrienti).length > 0)
+  );
+
+  let vitaminEntries = $derived<SpiderEntry[]>(() => {
+    const extra = computeExtraAgg();
+    const targets = $settingsStore.vitamine;
+    return VITAMINE_DEF.map((def) => ({
+      label: def.label,
+      labelFull: def.labelFull,
+      valore: extra[def.key] ?? 0,
+      target: targets[def.key] ?? def.defaultTarget,
+      unita: def.unita,
+    }));
+  });
+
+  let mineralEntries = $derived<SpiderEntry[]>(() => {
+    const extra = computeExtraAgg();
+    const targets = $settingsStore.minerali;
+    return MINERALI_DEF.map((def) => ({
+      label: def.label,
+      labelFull: def.labelFull,
+      valore: extra[def.key] ?? 0,
+      target: targets[def.key] ?? def.defaultTarget,
+      unita: def.unita,
+    }));
+  });
+
+  function openSettings() {
+    for (const def of VITAMINE_DEF) {
+      editVitamine[def.key] = String($settingsStore.vitamine[def.key] ?? def.defaultTarget);
+    }
+    for (const def of MINERALI_DEF) {
+      editMinerali[def.key] = String($settingsStore.minerali[def.key] ?? def.defaultTarget);
+    }
+    settingsOpen = true;
+  }
+
+  function saveSettings() {
+    for (const def of VITAMINE_DEF) {
+      const v = parseFloat((editVitamine[def.key] ?? "").replace(",", "."));
+      if (!isNaN(v) && v > 0) settingsStore.setTarget("vitamine", def.key, v);
+    }
+    for (const def of MINERALI_DEF) {
+      const v = parseFloat((editMinerali[def.key] ?? "").replace(",", "."));
+      if (!isNaN(v) && v > 0) settingsStore.setTarget("minerali", def.key, v);
+    }
+    settingsOpen = false;
+  }
+
+  function resetSettings() {
+    settingsStore.reset();
+    for (const def of VITAMINE_DEF) {
+      editVitamine[def.key] = String(def.defaultTarget);
+    }
+    for (const def of MINERALI_DEF) {
+      editMinerali[def.key] = String(def.defaultTarget);
+    }
+  }
 
   async function handleSubmit() {
     error = null;
@@ -190,6 +270,21 @@
           showGrams={true}
         />
       </div>
+
+      {#if hasExtraData()}
+        <div class="micro-section">
+          <div class="micro-header">
+            <span class="micro-title">Micronutrienti</span>
+            <button type="button" class="settings-btn" onclick={openSettings} title="Imposta obiettivi giornalieri">
+              ⚙ Obiettivi
+            </button>
+          </div>
+          <div class="spider-charts">
+            <SpiderChart entries={vitaminEntries()} title="Vitamine" />
+            <SpiderChart entries={mineralEntries()} title="Minerali" />
+          </div>
+        </div>
+      {/if}
     {:else}
       <p class="empty">Nessun ingrediente aggiunto. Cerca sopra per aggiungerne.</p>
     {/if}
@@ -211,6 +306,62 @@
     </div>
   {/if}
 </form>
+
+{#if settingsOpen}
+  <div class="modal-backdrop" role="presentation" onclick={() => (settingsOpen = false)}>
+    <div class="modal" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
+      <div class="modal-header">
+        <h3>Obiettivi giornalieri</h3>
+        <button type="button" class="modal-close" onclick={() => (settingsOpen = false)}>✕</button>
+      </div>
+      <div class="modal-body">
+        <h4>Vitamine</h4>
+        <div class="targets-grid">
+          {#each VITAMINE_DEF as def}
+            <label class="target-label">
+              <span class="target-name">{def.labelFull}</span>
+              <div class="target-input-wrap">
+                <input
+                  type="text"
+                  inputmode="decimal"
+                  bind:value={editVitamine[def.key]}
+                  class="target-input"
+                />
+                <span class="target-unit">{def.unita}</span>
+              </div>
+            </label>
+          {/each}
+        </div>
+        <h4>Minerali</h4>
+        <div class="targets-grid">
+          {#each MINERALI_DEF as def}
+            <label class="target-label">
+              <span class="target-name">{def.labelFull}</span>
+              <div class="target-input-wrap">
+                <input
+                  type="text"
+                  inputmode="decimal"
+                  bind:value={editMinerali[def.key]}
+                  class="target-input"
+                />
+                <span class="target-unit">{def.unita}</span>
+              </div>
+            </label>
+          {/each}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-ghost-danger" onclick={resetSettings}>Ripristina default</button>
+        <div class="modal-footer-right">
+          <button type="button" class="btn-secondary" onclick={() => (settingsOpen = false)}>Annulla</button>
+          <button type="button" class="btn-primary" onclick={saveSettings}>Salva</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<svelte:window onkeydown={(e) => { if (e.key === "Escape" && settingsOpen) settingsOpen = false; }} />
 
 <style>
   .form-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
@@ -244,4 +395,48 @@
   .btn-ghost-danger { background: none; border: none; color: #fa5252; cursor: pointer; font-size: 0.85rem; }
   .btn-ghost-danger:hover { text-decoration: underline; }
   .btn-danger { padding: 0.5rem 1rem; background: #fa5252; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+
+  /* Micronutrients spider chart section */
+  .micro-section { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #f1f3f5; }
+  .micro-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+  .micro-title { font-size: 0.85rem; font-weight: 600; color: #495057; }
+  .settings-btn { background: none; border: 1px solid #ced4da; border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.78rem; color: #495057; cursor: pointer; }
+  .settings-btn:hover { background: #f1f3f5; }
+  .spider-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 640px) { .spider-charts { grid-template-columns: 1fr; } }
+
+  /* Settings modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+  }
+  .modal {
+    background: #fff; border-radius: 10px; width: min(640px, 95vw);
+    max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.25rem; border-bottom: 1px solid #dee2e6;
+  }
+  .modal-header h3 { margin: 0; font-size: 1rem; }
+  .modal-close { background: none; border: none; font-size: 1rem; cursor: pointer; color: #868e96; padding: 0.25rem; }
+  .modal-close:hover { color: #212529; }
+  .modal-body { overflow-y: auto; padding: 1rem 1.25rem; flex: 1; }
+  .modal-body h4 { font-size: 0.8rem; font-weight: 600; color: #868e96; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.5rem; }
+  .modal-body h4 + .targets-grid { margin-bottom: 1.25rem; }
+  .targets-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; }
+  @media (max-width: 480px) { .targets-grid { grid-template-columns: 1fr; } }
+  .target-label { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; }
+  .target-name { color: #495057; }
+  .target-input-wrap { display: flex; align-items: center; gap: 0.3rem; }
+  .target-input { width: 80px; padding: 0.3rem 0.5rem; border: 1px solid #ced4da; border-radius: 5px; font-size: 0.85rem; }
+  .target-input:focus { outline: 2px solid #228be6; border-color: transparent; }
+  .target-unit { font-size: 0.75rem; color: #868e96; }
+  .modal-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 1.25rem; border-top: 1px solid #dee2e6; gap: 0.5rem;
+  }
+  .modal-footer-right { display: flex; gap: 0.5rem; }
 </style>

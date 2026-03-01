@@ -52,6 +52,7 @@ export interface RicettaFull {
   preparazione: string;
   ingredientiDettaglio: RicettaIngredienteDettaglio[];
   nutrizione: NutritionTotals;
+  extra_nutrienti?: Record<string, { valore: number; unita: string }>;
   created_at: string;
   updated_at: string;
 }
@@ -66,6 +67,7 @@ export interface GiornataRicettaDettaglio {
   id: string;
   nome: string;
   nutrizione: NutritionTotals;
+  extra_nutrienti?: Record<string, { valore: number; unita: string }>;
 }
 
 export interface GiornataFull {

@@ -38,7 +38,7 @@ server/
 ├── handlers/             # un file per entità + listaSpesa + scraper
 ├── parsers/
 │   ├── frontmatter.ts    # parseFile() / writeFile() con gray-matter
-│   └── nutritionCalc.ts  # scaleNutrition(), toGrams(), computeRicettaDettaglio()
+│   └── nutritionCalc.ts  # scaleNutrition(), toGrams(), computeRicettaDettaglio(), computeExtraAgg()
 └── services/
     ├── fileService.ts    # CRUD su file .md + cascade helpers
     ├── slugService.ts    # generazione slug unici
@@ -53,14 +53,16 @@ lib/
 ├── api.ts               # fetch wrappers tipizzati per tutte le API
 ├── ws.ts                # singleton WebSocket con auto-reconnect (exp. backoff)
 ├── types.ts             # mirror dei tipi server (mantenere sincronizzati)
-├── stores/              # ingredientiStore, ricetteStore, giornateStore
-│   └── *.ts             # .load() lazy, .reload(), patch on WS events
+├── stores/
+│   ├── ingredienti.ts / ricette.ts / giornate.ts  # .load() lazy, .reload(), patch on WS events
+│   └── settings.ts      # settingsStore: obiettivi micronutrienti per adulto (localStorage)
 ├── utils/nutrition.ts   # fmt(), sumNutrition(), zeroNutrition()
 └── components/
     ├── SortableTable.svelte      # tabella generica con sort + prop ondelete
     ├── MarkdownEditor.svelte     # click-to-edit: rendered view → textarea su click
     ├── MacroPieChart.svelte      # grafico a torta SVG (kcal da prot/carbo/grassi)
     ├── NutritionSummaryCard.svelte # riquadro nutrizione con MacroPieChart integrato
+    ├── SpiderChart.svelte        # grafico radar SVG micronutrienti (valore vs obiettivo)
     ├── IngredienteForm.svelte    # form create/edit ingrediente
     ├── RicettaForm.svelte        # form create/edit ricetta con calcoli live
     └── GiornataForm.svelte       # form create/edit giornata
@@ -94,6 +96,22 @@ Sempre dinamico, mai salvato su disco:
 - Unità → grammi: `quantita * peso_unita`
 - Grafico a torta (kcal): proteine×4, carboidrati×4, grassi×9
 
+### Grafici spider micronutrienti (vitamine e minerali)
+`RicettaForm` e `GiornataForm` mostrano due grafici radar SVG (vitamine + minerali) quando almeno un ingrediente ha `extra_nutrienti`.
+- Componente: `SpiderChart.svelte` — props `entries: SpiderEntry[]`, `title: string`
+- `SpiderEntry`: `{ label, labelFull, valore, target, unita }`
+- Gli obiettivi giornalieri sono salvati in `settingsStore` (localStorage, `dietplanner_settings_v1`)
+- `VITAMINE_DEF` e `MINERALI_DEF` in `stores/settings.ts` definiscono i 12+8 nutrienti con label, unità e default RDI per adulto maschio
+- Il pulsante **⚙ Obiettivi** apre un modal per modificare i target; condiviso tra ricette e giornate
+- In `GiornataForm`, `extra_nutrienti` arriva da `GiornataRicettaDettaglio.extra_nutrienti` (aggregato server-side da `enrichGiornata`)
+- Quando si aggiunge una ricetta al form giornata, `extra_nutrienti` viene passato da `RicettaFull.extra_nutrienti`
+
+### Export MD giornata
+`GET /api/giornate/:id/export-md` → `text/markdown` con attachment.
+Contiene per ogni ricetta: tabella macronutrienti per ingrediente + micronutrienti per ingrediente + totali ricetta.
+In fondo: totali giornata (macros + vitamine + minerali + altri nutrienti), organizzati in sezioni separate.
+Il bottone **↓ Esporta .md** è visibile nell'header di `GiornataForm` solo in modalità modifica.
+
 ### Import da nutritionvalue.org
 `POST /api/scrape-ingrediente` accetta `{ url }` e restituisce un `ScrapeResult` (non salva nulla).
 - URL validato: solo `www.nutritionvalue.org/*_nutritional_value.html`
@@ -115,6 +133,7 @@ GET/POST   /api/ricette
 GET/PUT/DELETE /api/ricette/:id
 GET/POST   /api/giornate
 GET/PUT/DELETE /api/giornate/:id
+GET        /api/giornate/:id/export-md → Markdown download (tutte le info nutrizionali)
 POST       /api/lista-spesa          → HTML download
 GET        /api/slugify?nome=&tipo=
 POST       /api/scrape-ingrediente   → ScrapeResult (scraping nutritionvalue.org)
@@ -149,3 +168,5 @@ I client reagiscono aggiornando lo store corrispondente.
 - Gli eventi form si gestiscono con `onsubmit={(e) => { e.preventDefault(); fn(); }}` (non `|preventDefault`)
 - `SortableTable` accetta `ondelete?: (row: T) => void` per aggiungere il cestino
 - `MacroPieChart` accetta `showGrams={true}` per mostrare i grammi in legenda
+- `SpiderChart` esporta `interface SpiderEntry` — importarla come `import type { SpiderEntry } from "./SpiderChart.svelte"`
+- `computeExtraAgg(ingredientiEntries, ingMap)` in `nutritionCalc.ts` aggrega `extra_nutrienti` scalando per grammi — usarla ogni volta che serve il totale micronutrienti di una ricetta

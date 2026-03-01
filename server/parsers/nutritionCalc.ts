@@ -99,6 +99,24 @@ export function zeroNutrition(): NutritionTotals {
   };
 }
 
+/** Aggregate extra_nutrienti (vitamins, minerals, etc.) from recipe ingredients, scaling by grams consumed */
+export function computeExtraAgg(
+  ingredientiEntries: RicettaIngrediente[],
+  ingredientiMap: Map<string, Ingrediente>
+): Record<string, { valore: number; unita: string }> {
+  const agg: Record<string, { valore: number; unita: string }> = {};
+  for (const entry of ingredientiEntries) {
+    const ing = ingredientiMap.get(entry.id);
+    if (!ing || !ing.extra_nutrienti) continue;
+    const grammi = toGrams(entry, ing);
+    for (const [key, { valore, unita }] of Object.entries(ing.extra_nutrienti)) {
+      const scaled = round(valore * grammi / 100);
+      agg[key] = { valore: round((agg[key]?.valore ?? 0) + scaled), unita };
+    }
+  }
+  return agg;
+}
+
 function round(n: number): number {
   return Math.round(n * 100) / 100;
 }

@@ -5,8 +5,11 @@
   import { giornateStore } from "../stores/giornate";
   import { goto } from "$app/navigation";
   import { sumNutrition, fmt } from "../utils/nutrition";
+  import { settingsStore, VITAMINE_DEF, MINERALI_DEF } from "../stores/settings";
   import RecipePicker from "./RecipePicker.svelte";
   import MacroPieChart from "./MacroPieChart.svelte";
+  import SpiderChart from "./SpiderChart.svelte";
+  import type { SpiderEntry } from "./SpiderChart.svelte";
   import type { GiornataFull, GiornataRicettaDettaglio, GiornataInput } from "../types";
 
   function sodioColor(mg: number): string {
@@ -37,15 +40,20 @@
   let loading = $state(false);
   let deleteConfirm = $state(false);
 
+  // Settings modal state
+  let settingsOpen = $state(false);
+  let editVitamine = $state<Record<string, string>>({});
+  let editMinerali = $state<Record<string, string>>({});
+
   let totale = $derived(sumNutrition(ricetteSelezionate.map((r) => r.nutrizione)));
 
   onMount(async () => {
     await ricetteStore.load();
   });
 
-  function addRicetta(r: { id: string; nome: string; nutrizione: GiornataRicettaDettaglio["nutrizione"] }) {
+  function addRicetta(r: { id: string; nome: string; nutrizione: GiornataRicettaDettaglio["nutrizione"]; extra_nutrienti?: GiornataRicettaDettaglio["extra_nutrienti"] }) {
     if (ricetteSelezionate.some((s) => s.id === r.id)) return;
-    ricetteSelezionate = [...ricetteSelezionate, { id: r.id, nome: r.nome, nutrizione: r.nutrizione }];
+    ricetteSelezionate = [...ricetteSelezionate, { id: r.id, nome: r.nome, nutrizione: r.nutrizione, extra_nutrienti: r.extra_nutrienti }];
   }
 
   function removeRicetta(id: string) {
@@ -58,6 +66,97 @@
       ricette: ricetteSelezionate.map((r) => r.id),
     };
   }
+
+  // ─── Spider chart data ───────────────────────────────────────────────────────
+
+  function computeGiornataExtra(): Record<string, { valore: number; unita: string }> {
+    const agg: Record<string, { valore: number; unita: string }> = {};
+    for (const r of ricetteSelezionate) {
+      for (const [key, { valore, unita }] of Object.entries(r.extra_nutrienti ?? {})) {
+        agg[key] = { valore: (agg[key]?.valore ?? 0) + valore, unita };
+      }
+    }
+    return agg;
+  }
+
+  let hasExtraData = $derived(() =>
+    ricetteSelezionate.some((r) => r.extra_nutrienti && Object.keys(r.extra_nutrienti).length > 0)
+  );
+
+  let vitaminEntries = $derived<SpiderEntry[]>(() => {
+    const extra = computeGiornataExtra();
+    const targets = $settingsStore.vitamine;
+    return VITAMINE_DEF.map((def) => ({
+      label: def.label,
+      labelFull: def.labelFull,
+      valore: extra[def.key]?.valore ?? 0,
+      target: targets[def.key] ?? def.defaultTarget,
+      unita: def.unita,
+    }));
+  });
+
+  let mineralEntries = $derived<SpiderEntry[]>(() => {
+    const extra = computeGiornataExtra();
+    const targets = $settingsStore.minerali;
+    return MINERALI_DEF.map((def) => ({
+      label: def.label,
+      labelFull: def.labelFull,
+      valore: extra[def.key]?.valore ?? 0,
+      target: targets[def.key] ?? def.defaultTarget,
+      unita: def.unita,
+    }));
+  });
+
+  function openSettings() {
+    for (const def of VITAMINE_DEF) {
+      editVitamine[def.key] = String($settingsStore.vitamine[def.key] ?? def.defaultTarget);
+    }
+    for (const def of MINERALI_DEF) {
+      editMinerali[def.key] = String($settingsStore.minerali[def.key] ?? def.defaultTarget);
+    }
+    settingsOpen = true;
+  }
+
+  function saveSettings() {
+    for (const def of VITAMINE_DEF) {
+      const v = parseFloat((editVitamine[def.key] ?? "").replace(",", "."));
+      if (!isNaN(v) && v > 0) settingsStore.setTarget("vitamine", def.key, v);
+    }
+    for (const def of MINERALI_DEF) {
+      const v = parseFloat((editMinerali[def.key] ?? "").replace(",", "."));
+      if (!isNaN(v) && v > 0) settingsStore.setTarget("minerali", def.key, v);
+    }
+    settingsOpen = false;
+  }
+
+  function resetSettings() {
+    settingsStore.reset();
+    for (const def of VITAMINE_DEF) editVitamine[def.key] = String(def.defaultTarget);
+    for (const def of MINERALI_DEF) editMinerali[def.key] = String(def.defaultTarget);
+  }
+
+  // ─── Export MD ───────────────────────────────────────────────────────────────
+
+  async function handleExport() {
+    if (!giornata) return;
+    loading = true;
+    try {
+      const md = await api.giornate.exportMd(giornata.id);
+      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${giornata.nome}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      error = "Errore durante l'esportazione";
+    } finally {
+      loading = false;
+    }
+  }
+
+  // ─── CRUD handlers ───────────────────────────────────────────────────────────
 
   async function handleSubmit() {
     error = null;
@@ -97,6 +196,11 @@
   <div class="form-header">
     <h1>{isEdit ? "Modifica Giornata" : "Nuova Giornata"}</h1>
     <div class="header-actions">
+      {#if isEdit && giornata}
+        <button type="button" class="btn-export" onclick={handleExport} disabled={loading} title="Esporta in Markdown">
+          ↓ Esporta .md
+        </button>
+      {/if}
       <button type="submit" class="btn-primary" disabled={loading}>
         {loading ? "Salvataggio..." : isEdit ? "Salva" : "Crea giornata"}
       </button>
@@ -120,7 +224,7 @@
     <div class="picker-wrap">
       <RecipePicker
         ricette={$ricetteStore}
-        onselect={(r) => addRicetta({ id: r.id, nome: r.nome, nutrizione: r.nutrizione })}
+        onselect={(r) => addRicetta({ id: r.id, nome: r.nome, nutrizione: r.nutrizione, extra_nutrienti: r.extra_nutrienti })}
       />
     </div>
 
@@ -173,6 +277,7 @@
           </tfoot>
         </table>
       </div>
+
       <div class="pie-wrap">
         <MacroPieChart
           proteine={totale.proteine}
@@ -181,6 +286,21 @@
           showGrams={true}
         />
       </div>
+
+      {#if hasExtraData()}
+        <div class="micro-section">
+          <div class="micro-header">
+            <span class="micro-title">Micronutrienti</span>
+            <button type="button" class="settings-btn" onclick={openSettings} title="Imposta obiettivi giornalieri">
+              ⚙ Obiettivi
+            </button>
+          </div>
+          <div class="spider-charts">
+            <SpiderChart entries={vitaminEntries()} title="Vitamine" />
+            <SpiderChart entries={mineralEntries()} title="Minerali" />
+          </div>
+        </div>
+      {/if}
     {:else}
       <p class="empty">Nessuna ricetta aggiunta. Cerca sopra per aggiungerne.</p>
     {/if}
@@ -198,11 +318,57 @@
   {/if}
 </form>
 
+{#if settingsOpen}
+  <div class="modal-backdrop" role="presentation" onclick={() => (settingsOpen = false)}>
+    <div class="modal" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
+      <div class="modal-header">
+        <h3>Obiettivi giornalieri</h3>
+        <button type="button" class="modal-close" onclick={() => (settingsOpen = false)}>✕</button>
+      </div>
+      <div class="modal-body">
+        <h4>Vitamine</h4>
+        <div class="targets-grid">
+          {#each VITAMINE_DEF as def}
+            <label class="target-label">
+              <span class="target-name">{def.labelFull}</span>
+              <div class="target-input-wrap">
+                <input type="text" inputmode="decimal" bind:value={editVitamine[def.key]} class="target-input" />
+                <span class="target-unit">{def.unita}</span>
+              </div>
+            </label>
+          {/each}
+        </div>
+        <h4>Minerali</h4>
+        <div class="targets-grid">
+          {#each MINERALI_DEF as def}
+            <label class="target-label">
+              <span class="target-name">{def.labelFull}</span>
+              <div class="target-input-wrap">
+                <input type="text" inputmode="decimal" bind:value={editMinerali[def.key]} class="target-input" />
+                <span class="target-unit">{def.unita}</span>
+              </div>
+            </label>
+          {/each}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-ghost-danger" onclick={resetSettings}>Ripristina default</button>
+        <div class="modal-footer-right">
+          <button type="button" class="btn-secondary" onclick={() => (settingsOpen = false)}>Annulla</button>
+          <button type="button" class="btn-primary" onclick={saveSettings}>Salva</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<svelte:window onkeydown={(e) => { if (e.key === "Escape" && settingsOpen) settingsOpen = false; }} />
+
 <style>
   .form-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
   h1 { font-size: 1.5rem; }
   h2 { font-size: 1rem; margin-bottom: 0.75rem; color: #495057; }
-  .header-actions { display: flex; gap: 0.5rem; }
+  .header-actions { display: flex; gap: 0.5rem; align-items: center; }
   .nome-wrap { margin-bottom: 1.25rem; max-width: 400px; }
   label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; font-weight: 500; }
   input { padding: 0.45rem 0.6rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9rem; }
@@ -234,4 +400,51 @@
   .btn-ghost-danger { background: none; border: none; color: #fa5252; cursor: pointer; font-size: 0.85rem; }
   .btn-ghost-danger:hover { text-decoration: underline; }
   .btn-danger { padding: 0.5rem 1rem; background: #fa5252; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  .btn-export { padding: 0.45rem 0.9rem; background: #f1f3f5; border: 1px solid #ced4da; border-radius: 6px; cursor: pointer; font-size: 0.85rem; color: #495057; }
+  .btn-export:hover:not(:disabled) { background: #e9ecef; }
+  .btn-export:disabled { opacity: 0.6; }
+
+  /* Micronutrients spider chart section */
+  .micro-section { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #f1f3f5; }
+  .micro-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+  .micro-title { font-size: 0.85rem; font-weight: 600; color: #495057; }
+  .settings-btn { background: none; border: 1px solid #ced4da; border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.78rem; color: #495057; cursor: pointer; }
+  .settings-btn:hover { background: #f1f3f5; }
+  .spider-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 640px) { .spider-charts { grid-template-columns: 1fr; } }
+
+  /* Settings modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+  }
+  .modal {
+    background: #fff; border-radius: 10px; width: min(640px, 95vw);
+    max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.25rem; border-bottom: 1px solid #dee2e6;
+  }
+  .modal-header h3 { margin: 0; font-size: 1rem; }
+  .modal-close { background: none; border: none; font-size: 1rem; cursor: pointer; color: #868e96; padding: 0.25rem; }
+  .modal-close:hover { color: #212529; }
+  .modal-body { overflow-y: auto; padding: 1rem 1.25rem; flex: 1; }
+  .modal-body h4 { font-size: 0.8rem; font-weight: 600; color: #868e96; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.5rem; }
+  .modal-body h4 + .targets-grid { margin-bottom: 1.25rem; }
+  .targets-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1rem; }
+  @media (max-width: 480px) { .targets-grid { grid-template-columns: 1fr; } }
+  .target-label { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; }
+  .target-name { color: #495057; }
+  .target-input-wrap { display: flex; align-items: center; gap: 0.3rem; }
+  .target-input { width: 80px; padding: 0.3rem 0.5rem; border: 1px solid #ced4da; border-radius: 5px; font-size: 0.85rem; }
+  .target-input:focus { outline: 2px solid #228be6; border-color: transparent; }
+  .target-unit { font-size: 0.75rem; color: #868e96; }
+  .modal-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 1.25rem; border-top: 1px solid #dee2e6; gap: 0.5rem;
+  }
+  .modal-footer-right { display: flex; gap: 0.5rem; }
 </style>
