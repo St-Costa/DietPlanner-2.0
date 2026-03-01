@@ -46,29 +46,29 @@
     {#if total === 0}
       <circle cx="60" cy="60" r="{r}" fill="none" stroke="#dee2e6" stroke-width="20" />
     {:else}
-      <!-- Proteine: green -->
-      <circle cx="60" cy="60" r="{r}" fill="none" stroke="#40c057" stroke-width="20"
+      <!-- Proteine: blue -->
+      <circle cx="60" cy="60" r="{r}" fill="none" stroke="#4c8ef7" stroke-width="20"
         stroke-dasharray={seg1da} stroke-dashoffset={seg1do} />
-      <!-- Carboidrati: yellow -->
-      <circle cx="60" cy="60" r="{r}" fill="none" stroke="#fcc419" stroke-width="20"
+      <!-- Carboidrati: brown -->
+      <circle cx="60" cy="60" r="{r}" fill="none" stroke="#a0522d" stroke-width="20"
         stroke-dasharray={seg2da} stroke-dashoffset={seg2do} />
-      <!-- Grassi: red -->
-      <circle cx="60" cy="60" r="{r}" fill="none" stroke="#fa5252" stroke-width="20"
+      <!-- Grassi: yellow -->
+      <circle cx="60" cy="60" r="{r}" fill="none" stroke="#fcc419" stroke-width="20"
         stroke-dasharray={seg3da} stroke-dashoffset={seg3do} />
     {/if}
   </svg>
 
   <div class="legend">
     <div class="leg-item">
-      <span class="dot" style="background:#40c057"></span>
+      <span class="dot" style="background:#4c8ef7"></span>
       <span>Prot <strong>{pct(p1)}</strong>{#if showGrams} <span class="grams">({g(proteine)})</span>{/if}</span>
     </div>
     <div class="leg-item">
-      <span class="dot" style="background:#fcc419"></span>
+      <span class="dot" style="background:#a0522d"></span>
       <span>Carbo <strong>{pct(p2)}</strong>{#if showGrams} <span class="grams">({g(carboidrati)})</span>{/if}</span>
     </div>
     <div class="leg-item">
-      <span class="dot" style="background:#fa5252"></span>
+      <span class="dot" style="background:#fcc419"></span>
       <span>Grassi <strong>{pct(p3)}</strong>{#if showGrams} <span class="grams">({g(grassi)})</span>{/if}</span>
     </div>
   </div>
