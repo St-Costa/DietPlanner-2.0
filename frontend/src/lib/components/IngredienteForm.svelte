@@ -196,7 +196,7 @@
   <h1>{isEdit ? "Modifica Ingrediente" : "Nuovo Ingrediente"}</h1>
 
   <section class="import-section">
-    <h2>Importa da nutritionvalue.org</h2>
+    <h2>Importa da <a href="https://www.nutritionvalue.org/" target="_blank" rel="noopener noreferrer">nutritionvalue.org</a></h2>
     <p class="hint">Incolla l'URL di una pagina nutritionvalue.org per compilare automaticamente i valori nutrizionali</p>
     <div class="import-row">
       <input
