@@ -1,0 +1,137 @@
+# DietPlanner 2.0 — Guida per Claude Code
+
+## Scopo
+App locale per gestire la dieta personale su Ubuntu. Permette di creare ingredienti, ricette e giornate alimentari, con calcolo nutrizionale automatico e lista della spesa scaricabile in HTML.
+
+## Come avviare
+```bash
+~/.bun/bin/bun dev          # backend (porta 3000) + frontend Vite (porta 5173)
+# Aprire http://localhost:5173 nel browser
+```
+Il backend Bun si riavvia automaticamente (`--watch`) quando si modificano file in `server/`.
+Vite HMR aggiorna il frontend senza reload quando si modificano file in `frontend/src/`.
+
+## Stack
+| Livello | Tecnologia |
+|---|---|
+| Runtime server | Bun |
+| Frontend | SvelteKit 5 con adapter-static (SPA) |
+| Storage | File `.md` con frontmatter YAML in `data/` |
+| Real-time | WebSocket nativo Bun + chokidar |
+| Markdown runtime | marked + DOMPurify |
+
+## Struttura dati
+I dati sono file `.md` con YAML frontmatter in tre cartelle:
+- `data/Ingredienti/<slug>.md`
+- `data/Ricette/<slug>.md`
+- `data/Giornate/<slug>.md`
+
+**L'ID di ogni entità è il nome del file (slug)** — non cambia mai dopo la creazione.
+I valori nutrizionali **non sono salvati**: vengono calcolati dinamicamente al momento della lettura.
+
+## Architettura server (`server/`)
+```
+server/
+├── index.ts              # Bun.serve() con HTTP + WebSocket upgrade
+├── router.ts             # routing manuale, CORS, serve static in prod
+├── types.ts              # interfacce TypeScript condivise
+├── handlers/             # un file per entità + listaSpesa
+├── parsers/
+│   ├── frontmatter.ts    # parseFile() / writeFile() con gray-matter
+│   └── nutritionCalc.ts  # scaleNutrition(), toGrams(), computeRicettaDettaglio()
+└── services/
+    ├── fileService.ts    # CRUD su file .md + cascade helpers
+    ├── slugService.ts    # generazione slug unici
+    ├── watcherService.ts # chokidar → broadcast WSMessage a tutti i client
+    └── shoppingListService.ts
+```
+
+## Architettura frontend (`frontend/src/`)
+```
+lib/
+├── api.ts               # fetch wrappers tipizzati per tutte le API
+├── ws.ts                # singleton WebSocket con auto-reconnect (exp. backoff)
+├── types.ts             # mirror dei tipi server (mantenere sincronizzati)
+├── stores/              # ingredientiStore, ricetteStore, giornateStore
+│   └── *.ts             # .load() lazy, .reload(), patch on WS events
+├── utils/nutrition.ts   # fmt(), sumNutrition(), zeroNutrition()
+└── components/
+    ├── SortableTable.svelte      # tabella generica con sort + prop ondelete
+    ├── MarkdownEditor.svelte     # click-to-edit: rendered view → textarea su click
+    ├── MacroPieChart.svelte      # grafico a torta SVG (kcal da prot/carbo/grassi)
+    ├── NutritionSummaryCard.svelte # riquadro nutrizione con MacroPieChart integrato
+    ├── IngredienteForm.svelte    # form create/edit ingrediente
+    ├── RicettaForm.svelte        # form create/edit ricetta con calcoli live
+    └── GiornataForm.svelte       # form create/edit giornata
+```
+
+## Decisioni architetturali chiave
+
+### WebSocket in sviluppo
+Vite non può fare da proxy al WebSocket perché Bun non implementa `socket.destroySoon`.
+**Fix**: il WebSocket si connette **direttamente** a `localhost:3000` in dev:
+```typescript
+// frontend/src/lib/ws.ts
+const host = import.meta.env.DEV ? "localhost:3000" : location.host;
+```
+
+### SvelteKit adapter-static
+Il frontend è buildato come SPA statica. In produzione Bun serve i file da `frontend/build/`.
+Non c'è SSR. `prerender.entries = []` nel config.
+
+### Cascade delete
+- Eliminare un **ingrediente** → rimuove automaticamente quell'ingrediente da tutte le ricette che lo contengono (aggiornando i file .md). La ricetta non viene eliminata.
+- Eliminare una **ricetta** → rimuove automaticamente la ricetta da tutte le giornate che la contengono.
+Le funzioni cascade sono `removeIngredienteFromRicette()` e `removeRicettaFromGiornate()` in `fileService.ts`.
+
+### IDs stabili
+Ingredienti e ricette si referenziano per **id** (= nome file slug), non per `nome`. Rinominare il campo `nome` non richiede cascade. L'id non cambia mai dopo la creazione.
+
+### Calcolo valori nutrizionali
+Sempre dinamico, mai salvato su disco:
+- Scaling: `valore_per_100g * grammi / 100`
+- Unità → grammi: `quantita * peso_unita`
+- Grafico a torta (kcal): proteine×4, carboidrati×4, grassi×9
+
+## API REST (porta 3000)
+```
+GET/POST   /api/ingredienti
+GET/PUT/DELETE /api/ingredienti/:id
+GET        /api/ingredienti/tipi
+GET/POST   /api/ricette
+GET/PUT/DELETE /api/ricette/:id
+GET/POST   /api/giornate
+GET/PUT/DELETE /api/giornate/:id
+POST       /api/lista-spesa          → HTML download
+GET        /api/slugify?nome=&tipo=
+```
+
+## Protocollo WebSocket
+Server → client only. Messaggi:
+```typescript
+{ type: "file_changed" | "file_created" | "file_deleted" | "connected", entity: "ingrediente"|"ricetta"|"giornata", id: string, timestamp: string }
+```
+I client reagiscono aggiornando lo store corrispondente.
+
+## Pattern tipici
+
+### Aggiungere una nuova entità
+1. Aggiungere il tipo in `server/types.ts` e `frontend/src/lib/types.ts`
+2. Aggiungere il folder in `fileService.ts` (FOLDER_MAP)
+3. Creare `server/handlers/nuovaEntita.ts`
+4. Registrare il handler in `server/router.ts`
+5. Creare `frontend/src/lib/stores/nuovaEntita.ts`
+6. Creare i componenti e le route
+
+### Aggiungere un campo a un'entità esistente
+1. Aggiungere il campo al tipo in `server/types.ts` e `frontend/src/lib/types.ts`
+2. Aggiungere nel form component
+3. Aggiungere nella `validateInput` del handler
+4. Il file .md si aggiorna automaticamente tramite `writeFile()` (gray-matter)
+
+## Note importanti
+- **Non installare node** — si usa esclusivamente Bun
+- Il frontend usa **Svelte 5** (rune: `$state`, `$derived`, `$props`) — non usare sintassi Svelte 4
+- Gli eventi form si gestiscono con `onsubmit={(e) => { e.preventDefault(); fn(); }}` (non `|preventDefault`)
+- `SortableTable` accetta `ondelete?: (row: T) => void` per aggiungere il cestino
+- `MacroPieChart` accetta `showGrams={true}` per mostrare i grammi in legenda
