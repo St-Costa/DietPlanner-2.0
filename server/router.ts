@@ -9,7 +9,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-export function router(req: Request, dataDir: string): Response | Promise<Response> {
+export async function router(req: Request, dataDir: string): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
 
@@ -18,36 +18,41 @@ export function router(req: Request, dataDir: string): Response | Promise<Respon
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  // Health check
-  if (path === "/health") {
-    return json({ ok: true, timestamp: new Date().toISOString() });
-  }
+  try {
+    // Health check
+    if (path === "/health") {
+      return json({ ok: true, timestamp: new Date().toISOString() });
+    }
 
-  // Slugify helper
-  if (path === "/api/slugify" && req.method === "GET") {
-    return handleSlugify(url, dataDir);
-  }
+    // Slugify helper
+    if (path === "/api/slugify" && req.method === "GET") {
+      return await handleSlugify(url, dataDir);
+    }
 
-  // Route to handlers
-  if (path.startsWith("/api/ingredienti")) {
-    return handleIngredienti(req, url, dataDir);
-  }
-  if (path.startsWith("/api/ricette")) {
-    return handleRicette(req, url, dataDir);
-  }
-  if (path.startsWith("/api/giornate")) {
-    return handleGiornate(req, url, dataDir);
-  }
-  if (path === "/api/lista-spesa" && req.method === "POST") {
-    return handleListaSpesa(req, dataDir);
-  }
+    // Route to handlers
+    if (path.startsWith("/api/ingredienti")) {
+      return await handleIngredienti(req, url, dataDir);
+    }
+    if (path.startsWith("/api/ricette")) {
+      return await handleRicette(req, url, dataDir);
+    }
+    if (path.startsWith("/api/giornate")) {
+      return await handleGiornate(req, url, dataDir);
+    }
+    if (path === "/api/lista-spesa" && req.method === "POST") {
+      return await handleListaSpesa(req, dataDir);
+    }
 
-  // Serve static files from frontend/build in production
-  if (process.env.NODE_ENV === "production") {
-    return serveStatic(path);
-  }
+    // Serve static files from frontend/build in production
+    if (process.env.NODE_ENV === "production") {
+      return await serveStatic(path);
+    }
 
-  return json({ error: "Not found" }, 404);
+    return json({ error: "Not found" }, 404);
+  } catch (err) {
+    console.error(`[router] Unhandled error on ${req.method} ${path}:`, err);
+    return json({ error: "Internal server error", details: String(err) }, 500);
+  }
 }
 
 async function handleSlugify(url: URL, dataDir: string): Promise<Response> {

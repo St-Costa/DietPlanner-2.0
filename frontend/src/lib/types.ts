@@ -70,7 +70,6 @@ export interface GiornataRicettaDettaglio {
 export interface GiornataFull {
   id: string;
   nome: string;
-  data: string | null;
   ricette: string[];
   ricetteDettaglio: GiornataRicettaDettaglio[];
   totale: NutritionTotals;
@@ -80,7 +79,6 @@ export interface GiornataFull {
 
 export type GiornataInput = {
   nome: string;
-  data: string | null;
   ricette: string[];
 };
 

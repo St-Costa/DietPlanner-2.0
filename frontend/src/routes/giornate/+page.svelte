@@ -4,10 +4,26 @@
   import { giornateStore } from "$lib/stores/giornate";
   import { api } from "$lib/api";
   import { fmt } from "$lib/utils/nutrition";
-  import NutritionSummaryCard from "$lib/components/NutritionSummaryCard.svelte";
   import type { GiornataFull } from "$lib/types";
 
   onMount(() => giornateStore.load());
+
+  function sodioColor(mg: number): string {
+    if (mg <= 1500) return "ok";
+    if (mg <= 2300) return "warn";
+    return "danger";
+  }
+
+  function colesteroloColor(mg: number): string {
+    if (mg <= 200) return "ok";
+    if (mg <= 300) return "warn";
+    return "danger";
+  }
+
+  function kcalPct(kcal: number, total: number): string {
+    if (total <= 0) return "0%";
+    return (kcal / total * 100).toFixed(0) + "%";
+  }
 
   async function handleDelete(g: GiornataFull) {
     const ok = window.confirm(`Eliminare la giornata "${g.nome}"?`);
@@ -29,10 +45,7 @@
     {#each $giornateStore as g}
       <div class="day-card">
         <div class="day-header">
-          <div>
-            <div class="day-nome">{g.nome}</div>
-            {#if g.data}<div class="day-data">{g.data}</div>{/if}
-          </div>
+          <div class="day-nome">{g.nome}</div>
           <div class="card-actions">
             <button class="edit-btn" onclick={() => goto(`/giornate/${g.id}`)}>Modifica</button>
             <button class="delete-btn" title="Elimina giornata" onclick={() => handleDelete(g)}>
@@ -46,19 +59,53 @@
           </div>
         </div>
 
-        <div class="ricette-list">
-          {#each g.ricetteDettaglio as r}
-            <div class="ricetta-row">
-              <span class="r-nome">{r.nome}</span>
-              <span class="r-kcal">{fmt(r.nutrizione.kcal, 0)} kcal</span>
-            </div>
-          {/each}
-          {#if g.ricetteDettaglio.length === 0}
-            <span class="no-ricette">Nessuna ricetta</span>
-          {/if}
-        </div>
+        {#if g.ricetteDettaglio.length > 0}
+          {@const t = g.totale}
+          {@const kcalMacro = t.proteine * 4 + t.carboidrati * 4 + t.grassi * 9}
+          <ul class="ricette-list">
+            {#each g.ricetteDettaglio as r}
+              <li>{r.nome}</li>
+            {/each}
+          </ul>
 
-        <NutritionSummaryCard totale={g.totale} label="Totale giornata" />
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Kcal</th>
+                  <th>Proteine</th>
+                  <th>Grassi</th>
+                  <th>Carbo</th>
+                  <th>Fibre</th>
+                  <th>Sodio</th>
+                  <th>Chol</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="total-row">
+                  <td>{fmt(t.kcal, 0)}</td>
+                  <td>
+                    {fmt(t.proteine)}
+                    <span class="pct">{kcalPct(t.proteine * 4, kcalMacro)}</span>
+                  </td>
+                  <td>
+                    {fmt(t.grassi)}
+                    <span class="pct">{kcalPct(t.grassi * 9, kcalMacro)}</span>
+                  </td>
+                  <td>
+                    {fmt(t.carboidrati)}
+                    <span class="pct">{kcalPct(t.carboidrati * 4, kcalMacro)}</span>
+                  </td>
+                  <td>{fmt(t.fibre)}</td>
+                  <td class="health-{sodioColor(t.sodio)}">{fmt(t.sodio, 0)}</td>
+                  <td class="health-{colesteroloColor(t.colesterolo)}">{fmt(t.colesterolo, 0)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        {:else}
+          <span class="no-ricette">Nessuna ricetta</span>
+        {/if}
       </div>
     {/each}
   </div>
@@ -72,17 +119,24 @@
   .empty { color: #868e96; }
   .cards { display: flex; flex-direction: column; gap: 1.25rem; }
   .day-card { background: #fff; border: 1px solid #dee2e6; border-radius: 10px; padding: 1.25rem; }
-  .day-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 0.75rem; }
+  .day-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
   .day-nome { font-size: 1.1rem; font-weight: 700; }
-  .day-data { font-size: 0.82rem; color: #868e96; margin-top: 0.15rem; }
   .card-actions { display: flex; align-items: center; gap: 0.4rem; }
   .edit-btn { padding: 0.35rem 0.75rem; border: 1px solid #dee2e6; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.85rem; }
   .edit-btn:hover { background: #f1f3f5; }
   .delete-btn { background: none; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; color: #fa5252; padding: 0.35rem 0.45rem; display: inline-flex; align-items: center; opacity: 0.7; }
   .delete-btn:hover { opacity: 1; background: #fff5f5; border-color: #ffa8a8; }
-  .ricette-list { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem; }
-  .ricetta-row { display: flex; justify-content: space-between; font-size: 0.88rem; padding: 0.25rem 0; border-bottom: 1px solid #f1f3f5; }
-  .r-nome { flex: 1; }
-  .r-kcal { color: #868e96; }
+  .ricette-list { list-style: none; padding: 0; margin: 0 0 0.75rem 0; display: flex; flex-direction: column; gap: 0; }
+  .ricette-list li { font-size: 0.88rem; color: #495057; padding: 0.2rem 0; border-bottom: 1px solid #f1f3f5; }
+  .ricette-list li:last-child { border-bottom: none; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  th { padding: 0.35rem 0.6rem; background: #f1f3f5; border-bottom: 2px solid #dee2e6; text-align: center; white-space: nowrap; font-size: 0.78rem; color: #495057; }
+  td { padding: 0.35rem 0.6rem; white-space: nowrap; text-align: center; vertical-align: middle; }
+  .total-row td { font-weight: 700; font-size: 1.05rem; }
+  .pct { display: block; font-size: 0.75rem; font-weight: 400; color: #868e96; }
+  .health-ok { color: #2f9e44; }
+  .health-warn { color: #e67700; }
+  .health-danger { color: #c92a2a; }
   .no-ricette { color: #adb5bd; font-size: 0.85rem; }
 </style>

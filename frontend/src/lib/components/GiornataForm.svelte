@@ -4,11 +4,22 @@
   import { ricetteStore } from "../stores/ricette";
   import { giornateStore } from "../stores/giornate";
   import { goto } from "$app/navigation";
-  import { sumNutrition, zeroNutrition } from "../utils/nutrition";
-  import RecipeCard from "./RecipeCard.svelte";
+  import { sumNutrition, fmt } from "../utils/nutrition";
   import RecipePicker from "./RecipePicker.svelte";
-  import NutritionSummaryCard from "./NutritionSummaryCard.svelte";
+  import MacroPieChart from "./MacroPieChart.svelte";
   import type { GiornataFull, GiornataRicettaDettaglio, GiornataInput } from "../types";
+
+  function sodioColor(mg: number): string {
+    if (mg <= 1500) return "ok";
+    if (mg <= 2300) return "warn";
+    return "danger";
+  }
+
+  function colesteroloColor(mg: number): string {
+    if (mg <= 200) return "ok";
+    if (mg <= 300) return "warn";
+    return "danger";
+  }
 
   let {
     giornata = null,
@@ -19,7 +30,6 @@
   const isEdit = $derived(!!giornata);
 
   let nome = $state(giornata?.nome ?? "");
-  let data = $state(giornata?.data ?? new Date().toISOString().split("T")[0]);
   let ricetteSelezionate = $state<GiornataRicettaDettaglio[]>(
     giornata?.ricetteDettaglio ?? []
   );
@@ -45,7 +55,6 @@
   function buildInput(): GiornataInput {
     return {
       nome,
-      data: data || null,
       ricette: ricetteSelezionate.map((r) => r.id),
     };
   }
@@ -99,14 +108,10 @@
     <div class="error">{error}</div>
   {/if}
 
-  <div class="row">
+  <div class="nome-wrap">
     <label>
       Nome giornata *
       <input bind:value={nome} required placeholder="es. Lunedì tipo" />
-    </label>
-    <label>
-      Data (opzionale)
-      <input type="date" bind:value={data} />
     </label>
   </div>
 
@@ -120,13 +125,61 @@
     </div>
 
     {#if ricetteSelezionate.length > 0}
-      <div class="recipe-list">
-        {#each ricetteSelezionate as r}
-          <RecipeCard ricetta={r} onremove={() => removeRicetta(r.id)} />
-        {/each}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Ricetta</th>
+              <th class="num">Kcal</th>
+              <th class="num">Proteine</th>
+              <th class="num">Grassi</th>
+              <th class="num">Carbo</th>
+              <th class="num">Fibre</th>
+              <th class="num">Sodio</th>
+              <th class="num">Chol</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each ricetteSelezionate as r}
+              {@const n = r.nutrizione}
+              <tr>
+                <td>{r.nome}</td>
+                <td class="num">{n.kcal.toFixed(0)}</td>
+                <td class="num">{n.proteine.toFixed(1)}</td>
+                <td class="num">{n.grassi.toFixed(1)} <span class="sub">({n.saturi.toFixed(1)})</span></td>
+                <td class="num">{n.carboidrati.toFixed(1)} <span class="sub">({n.zuccheri.toFixed(1)})</span></td>
+                <td class="num">{n.fibre.toFixed(1)}</td>
+                <td class="num">{n.sodio.toFixed(0)}</td>
+                <td class="num">{n.colesterolo.toFixed(0)}</td>
+                <td>
+                  <button type="button" class="rm-btn" onclick={() => removeRicetta(r.id)}>✕</button>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+          <tfoot>
+            <tr class="total-row">
+              <td class="label">Totale</td>
+              <td class="num">{fmt(totale.kcal, 0)}</td>
+              <td class="num">{fmt(totale.proteine)}</td>
+              <td class="num">{fmt(totale.grassi)} <span class="sub">({fmt(totale.saturi)})</span></td>
+              <td class="num">{fmt(totale.carboidrati)} <span class="sub">({fmt(totale.zuccheri)})</span></td>
+              <td class="num">{fmt(totale.fibre)}</td>
+              <td class="num health-{sodioColor(totale.sodio)}">{fmt(totale.sodio, 0)}</td>
+              <td class="num health-{colesteroloColor(totale.colesterolo)}">{fmt(totale.colesterolo, 0)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
-      <div class="summary-wrap">
-        <NutritionSummaryCard {totale} />
+      <div class="pie-wrap">
+        <MacroPieChart
+          proteine={totale.proteine}
+          carboidrati={totale.carboidrati}
+          grassi={totale.grassi}
+          showGrams={true}
+        />
       </div>
     {:else}
       <p class="empty">Nessuna ricetta aggiunta. Cerca sopra per aggiungerne.</p>
@@ -150,14 +203,26 @@
   h1 { font-size: 1.5rem; }
   h2 { font-size: 1rem; margin-bottom: 0.75rem; color: #495057; }
   .header-actions { display: flex; gap: 0.5rem; }
-  .row { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1.25rem; }
+  .nome-wrap { margin-bottom: 1.25rem; max-width: 400px; }
   label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; font-weight: 500; }
   input { padding: 0.45rem 0.6rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9rem; }
   input:focus { outline: 2px solid #228be6; border-color: transparent; }
   section { margin-bottom: 1.5rem; padding: 1rem; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; }
   .picker-wrap { margin-bottom: 1rem; max-width: 400px; }
-  .recipe-list { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
-  .summary-wrap { margin-top: 0.5rem; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  th { padding: 0.4rem 0.6rem; background: #f1f3f5; border-bottom: 2px solid #dee2e6; text-align: center; vertical-align: middle; white-space: nowrap; }
+  td { padding: 0.4rem 0.6rem; border-bottom: 1px solid #f1f3f5; white-space: nowrap; text-align: center; vertical-align: middle; }
+  td.label { font-weight: 500; text-align: left; }
+  td.num { text-align: center; }
+  .sub { color: #868e96; font-size: 0.8em; }
+  .rm-btn { background: none; border: none; cursor: pointer; color: #868e96; font-size: 0.85rem; padding: 0.2rem 0.4rem; }
+  .rm-btn:hover { color: #fa5252; }
+  .total-row td { font-weight: 700; font-size: 1.05rem; background: #f8f9fa; border-top: 2px solid #dee2e6; border-bottom: none; }
+  .health-ok { color: #2f9e44; font-weight: 700; }
+  .health-warn { color: #e67700; font-weight: 700; }
+  .health-danger { color: #c92a2a; font-weight: 700; }
+  .pie-wrap { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #f1f3f5; }
   .empty { color: #868e96; font-size: 0.9rem; }
   .error { padding: 0.75rem; background: #fff5f5; border: 1px solid #ff8787; border-radius: 6px; color: #c92a2a; margin-bottom: 1rem; }
   .delete-zone { display: flex; gap: 0.5rem; margin-top: 1rem; }

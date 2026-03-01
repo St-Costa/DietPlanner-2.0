@@ -76,7 +76,6 @@ export type RicettaInput = {
 export interface Giornata {
   id: string;
   nome: string;
-  data: string | null; // ISO date string, null for template days
   ricette: string[];   // list of ricetta ids (1 portion each)
   created_at: string;
   updated_at: string;
@@ -95,7 +94,6 @@ export interface GiornataFull extends Giornata {
 
 export type GiornataInput = {
   nome: string;
-  data: string | null;
   ricette: string[];
 };
 
