@@ -35,7 +35,7 @@ server/
 ├── index.ts              # Bun.serve() con HTTP + WebSocket upgrade
 ├── router.ts             # routing manuale, CORS, serve static in prod
 ├── types.ts              # interfacce TypeScript condivise
-├── handlers/             # un file per entità + listaSpesa
+├── handlers/             # un file per entità + listaSpesa + scraper
 ├── parsers/
 │   ├── frontmatter.ts    # parseFile() / writeFile() con gray-matter
 │   └── nutritionCalc.ts  # scaleNutrition(), toGrams(), computeRicettaDettaglio()
@@ -43,7 +43,8 @@ server/
     ├── fileService.ts    # CRUD su file .md + cascade helpers
     ├── slugService.ts    # generazione slug unici
     ├── watcherService.ts # chokidar → broadcast WSMessage a tutti i client
-    └── shoppingListService.ts
+    ├── shoppingListService.ts
+    └── scraperService.ts # scraping deterministico nutritionvalue.org (node-html-parser)
 ```
 
 ## Architettura frontend (`frontend/src/`)
@@ -93,6 +94,18 @@ Sempre dinamico, mai salvato su disco:
 - Unità → grammi: `quantita * peso_unita`
 - Grafico a torta (kcal): proteine×4, carboidrati×4, grassi×9
 
+### Import da nutritionvalue.org
+`POST /api/scrape-ingrediente` accetta `{ url }` e restituisce un `ScrapeResult` (non salva nulla).
+- URL validato: solo `www.nutritionvalue.org/*_nutritional_value.html`
+- Parsing HTML deterministico con `node-html-parser` (no AI, no headless browser)
+- I 9 campi core vengono mappati direttamente; tutto il resto (vitamine, minerali, amminoacidi…) va in `extra_nutrienti?: Record<string, { valore: number; unita: string }>` sul tipo `Ingrediente`
+- `IngredienteForm` ha una sezione "Importa da URL" che pre-popola i campi; l'utente può modificare prima di salvare
+
+### Campi numerici nel form ingrediente
+I campi numerici usano `type="text"` con `inputmode="decimal"` anziché `type="number"`.
+Questo permette di digitare sia `","` che `"."` come separatore decimale.
+La funzione `parseNum(s)` normalizza la virgola in punto prima di inviare al server.
+
 ## API REST (porta 3000)
 ```
 GET/POST   /api/ingredienti
@@ -104,6 +117,7 @@ GET/POST   /api/giornate
 GET/PUT/DELETE /api/giornate/:id
 POST       /api/lista-spesa          → HTML download
 GET        /api/slugify?nome=&tipo=
+POST       /api/scrape-ingrediente   → ScrapeResult (scraping nutritionvalue.org)
 ```
 
 ## Protocollo WebSocket

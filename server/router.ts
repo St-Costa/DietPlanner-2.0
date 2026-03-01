@@ -2,6 +2,7 @@ import { handleIngredienti } from "./handlers/ingredienti";
 import { handleRicette } from "./handlers/ricette";
 import { handleGiornate } from "./handlers/giornate";
 import { handleListaSpesa } from "./handlers/listaSpesa";
+import { handleScrapeIngrediente } from "./handlers/scraper";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -41,6 +42,9 @@ export async function router(req: Request, dataDir: string): Promise<Response> {
     }
     if (path === "/api/lista-spesa" && req.method === "POST") {
       return await handleListaSpesa(req, dataDir);
+    }
+    if (path === "/api/scrape-ingrediente") {
+      return await handleScrapeIngrediente(req);
     }
 
     // Serve static files from frontend/build in production

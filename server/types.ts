@@ -26,6 +26,8 @@ export interface Ingrediente extends NutritionPer100g {
   nome_unita: string | null;
   peso_unita: number | null; // grams per unit
   costo: number | null;      // euros per unit
+  // extra nutritional values (vitamins, minerals, etc.) from import
+  extra_nutrienti?: Record<string, { valore: number; unita: string }>;
   created_at: string;
   updated_at: string;
 }

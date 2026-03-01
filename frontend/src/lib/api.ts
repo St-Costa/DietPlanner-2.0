@@ -3,6 +3,7 @@ import type {
   RicettaFull, RicettaInput,
   GiornataFull, GiornataInput,
   ShoppingListSelezione, SlugifyResponse,
+  ScrapeResult,
 } from "./types";
 
 // In production, API is on same origin. In dev, Vite proxies /api to localhost:3000
@@ -79,6 +80,12 @@ export const api = {
 
   slugify: (nome: string, tipo: "ingrediente" | "ricetta" | "giornata") =>
     request<SlugifyResponse>(`/api/slugify?nome=${encodeURIComponent(nome)}&tipo=${tipo}`),
+
+  scrapeIngrediente: (url: string) =>
+    request<ScrapeResult>("/api/scrape-ingrediente", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
 
   listaSpesa: {
     genera: async (selezione: ShoppingListSelezione[]): Promise<string> => {

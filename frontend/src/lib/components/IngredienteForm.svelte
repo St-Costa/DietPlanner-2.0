@@ -2,7 +2,7 @@
   import { api, ApiError } from "../api";
   import { ingredientiStore } from "../stores/ingredienti";
   import { goto } from "$app/navigation";
-  import type { Ingrediente, IngredienteInput } from "../types";
+  import type { Ingrediente, IngredienteInput, ScrapeResult } from "../types";
 
   let {
     ingrediente = null,
@@ -12,21 +12,35 @@
 
   const isEdit = $derived(!!ingrediente);
 
+  // Numeric fields stored as strings to accept both "," and "." as decimal separator.
+  // parseNum() normalizes before sending to the server.
+  function parseNum(s: string): number {
+    const n = parseFloat(s.trim().replace(",", "."));
+    return isNaN(n) ? 0 : n;
+  }
+  function numStr(n: number | null | undefined): string {
+    return n != null ? String(n) : "";
+  }
+
   // Form fields
   let nome = $state(ingrediente?.nome ?? "");
   let tipo = $state(ingrediente?.tipo ?? "");
-  let kcal = $state(ingrediente?.kcal ?? 0);
-  let proteine = $state(ingrediente?.proteine ?? 0);
-  let fibre = $state(ingrediente?.fibre ?? 0);
-  let grassi = $state(ingrediente?.grassi ?? 0);
-  let saturi = $state(ingrediente?.saturi ?? 0);
-  let carboidrati = $state(ingrediente?.carboidrati ?? 0);
-  let zuccheri = $state(ingrediente?.zuccheri ?? 0);
-  let sodio = $state(ingrediente?.sodio ?? 0);
-  let colesterolo = $state(ingrediente?.colesterolo ?? 0);
+  let kcal = $state(numStr(ingrediente?.kcal ?? 0));
+  let proteine = $state(numStr(ingrediente?.proteine ?? 0));
+  let fibre = $state(numStr(ingrediente?.fibre ?? 0));
+  let grassi = $state(numStr(ingrediente?.grassi ?? 0));
+  let saturi = $state(numStr(ingrediente?.saturi ?? 0));
+  let carboidrati = $state(numStr(ingrediente?.carboidrati ?? 0));
+  let zuccheri = $state(numStr(ingrediente?.zuccheri ?? 0));
+  let sodio = $state(numStr(ingrediente?.sodio ?? 0));
+  let colesterolo = $state(numStr(ingrediente?.colesterolo ?? 0));
   let nome_unita = $state(ingrediente?.nome_unita ?? "");
-  let peso_unita = $state(ingrediente?.peso_unita ?? 0);
-  let costo = $state(ingrediente?.costo ?? 0);
+  let peso_unita = $state(numStr(ingrediente?.peso_unita));
+  let costo = $state(numStr(ingrediente?.costo));
+
+  let extra_nutrienti = $state<Record<string, { valore: number; unita: string }>>(
+    ingrediente?.extra_nutrienti ?? {}
+  );
 
   let tipiSuggeriti = $state<string[]>([]);
   let showSuggestions = $state(false);
@@ -34,6 +48,41 @@
   let loading = $state(false);
   let deleteConfirm = $state(false);
   let conflictWarning = $state<{ affectedRecipes: string[]; message: string } | null>(null);
+
+  // Import from nutritionvalue.org
+  let importUrl = $state("");
+  let importLoading = $state(false);
+  let importError = $state<string | null>(null);
+  let importSuccess = $state(false);
+
+  async function handleImport() {
+    importError = null;
+    importSuccess = false;
+    importLoading = true;
+    try {
+      const result: ScrapeResult = await api.scrapeIngrediente(importUrl.trim());
+      nome = result.nome;
+      kcal = String(result.kcal);
+      proteine = String(result.proteine);
+      grassi = String(result.grassi);
+      saturi = String(result.saturi);
+      carboidrati = String(result.carboidrati);
+      zuccheri = String(result.zuccheri);
+      fibre = String(result.fibre);
+      sodio = String(result.sodio);
+      colesterolo = String(result.colesterolo);
+      extra_nutrienti = result.extra_nutrienti;
+      importSuccess = true;
+    } catch (e) {
+      if (e instanceof ApiError) {
+        importError = String(e.body.error ?? e.message);
+      } else {
+        importError = "Errore di rete o URL non raggiungibile";
+      }
+    } finally {
+      importLoading = false;
+    }
+  }
 
   async function fetchTipi() {
     try {
@@ -50,11 +99,20 @@
 
   function buildInput(): IngredienteInput {
     return {
-      nome, tipo, kcal, proteine, fibre, grassi, saturi,
-      carboidrati, zuccheri, sodio, colesterolo,
+      nome, tipo,
+      kcal: parseNum(kcal),
+      proteine: parseNum(proteine),
+      fibre: parseNum(fibre),
+      grassi: parseNum(grassi),
+      saturi: parseNum(saturi),
+      carboidrati: parseNum(carboidrati),
+      zuccheri: parseNum(zuccheri),
+      sodio: parseNum(sodio),
+      colesterolo: parseNum(colesterolo),
       nome_unita: nome_unita.trim() || null,
-      peso_unita: nome_unita.trim() ? peso_unita : null,
-      costo: nome_unita.trim() ? costo : null,
+      peso_unita: nome_unita.trim() ? parseNum(peso_unita) : null,
+      costo: nome_unita.trim() ? parseNum(costo) : null,
+      extra_nutrienti: Object.keys(extra_nutrienti).length > 0 ? extra_nutrienti : undefined,
     };
   }
 
@@ -137,6 +195,39 @@
 <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
   <h1>{isEdit ? "Modifica Ingrediente" : "Nuovo Ingrediente"}</h1>
 
+  <section class="import-section">
+    <h2>Importa da nutritionvalue.org</h2>
+    <p class="hint">Incolla l'URL di una pagina nutritionvalue.org per compilare automaticamente i valori nutrizionali</p>
+    <div class="import-row">
+      <input
+        class="import-url"
+        type="url"
+        bind:value={importUrl}
+        placeholder="https://www.nutritionvalue.org/Banana%2C_raw_63107010_nutritional_value.html"
+        disabled={importLoading}
+      />
+      <button
+        type="button"
+        class="btn-import"
+        onclick={handleImport}
+        disabled={importLoading || !importUrl.trim()}
+      >
+        {importLoading ? "Caricamento..." : "Carica"}
+      </button>
+    </div>
+    {#if importError}
+      <div class="import-error">{importError}</div>
+    {/if}
+    {#if importSuccess}
+      <div class="import-ok">
+        Dati importati. Verifica e modifica i campi prima di salvare.
+        {#if Object.keys(extra_nutrienti).length > 0}
+          <br><span class="import-extra">{Object.keys(extra_nutrienti).length} valori extra salvati (vitamine, minerali, ecc.)</span>
+        {/if}
+      </div>
+    {/if}
+  </section>
+
   {#if error}
     <div class="error">{error}</div>
   {/if}
@@ -184,15 +275,15 @@
   <section>
     <h2>Valori nutrizionali (per 100 g)</h2>
     <div class="grid-2">
-      <label>Kcal <input type="number" bind:value={kcal} min="0" step="0.1" required /></label>
-      <label>Proteine (g) <input type="number" bind:value={proteine} min="0" step="0.1" required /></label>
-      <label>Grassi (g) <input type="number" bind:value={grassi} min="0" step="0.1" required /></label>
-      <label>— di cui saturi (g) <input type="number" bind:value={saturi} min="0" step="0.1" required /></label>
-      <label>Carboidrati (g) <input type="number" bind:value={carboidrati} min="0" step="0.1" required /></label>
-      <label>— di cui zuccheri (g) <input type="number" bind:value={zuccheri} min="0" step="0.1" required /></label>
-      <label>Fibre (g) <input type="number" bind:value={fibre} min="0" step="0.1" required /></label>
-      <label>Sodio (mg) <input type="number" bind:value={sodio} min="0" step="1" required /></label>
-      <label>Colesterolo (mg) <input type="number" bind:value={colesterolo} min="0" step="1" required /></label>
+      <label>Kcal <input type="text" inputmode="decimal" bind:value={kcal} required placeholder="0" /></label>
+      <label>Proteine (g) <input type="text" inputmode="decimal" bind:value={proteine} required placeholder="0" /></label>
+      <label>Grassi (g) <input type="text" inputmode="decimal" bind:value={grassi} required placeholder="0" /></label>
+      <label>— di cui saturi (g) <input type="text" inputmode="decimal" bind:value={saturi} required placeholder="0" /></label>
+      <label>Carboidrati (g) <input type="text" inputmode="decimal" bind:value={carboidrati} required placeholder="0" /></label>
+      <label>— di cui zuccheri (g) <input type="text" inputmode="decimal" bind:value={zuccheri} required placeholder="0" /></label>
+      <label>Fibre (g) <input type="text" inputmode="decimal" bind:value={fibre} required placeholder="0" /></label>
+      <label>Sodio (mg) <input type="text" inputmode="decimal" bind:value={sodio} required placeholder="0" /></label>
+      <label>Colesterolo (mg) <input type="text" inputmode="decimal" bind:value={colesterolo} required placeholder="0" /></label>
     </div>
   </section>
 
@@ -201,8 +292,8 @@
     <p class="hint">Compila se vuoi inserire le quantità in unità (es. "2 uova") invece che in grammi</p>
     <div class="grid-3">
       <label>Nome unità <input bind:value={nome_unita} placeholder="es. Uovo" /></label>
-      <label>Peso unità (g) <input type="number" bind:value={peso_unita} min="0" step="0.1" /></label>
-      <label>Costo (€/unità) <input type="number" bind:value={costo} min="0" step="0.01" /></label>
+      <label>Peso unità (g) <input type="text" inputmode="decimal" bind:value={peso_unita} placeholder="0" /></label>
+      <label>Costo (€/unità) <input type="text" inputmode="decimal" bind:value={costo} placeholder="0" /></label>
     </div>
   </section>
 
@@ -296,4 +387,23 @@
   .warning { padding: 0.75rem; background: #fff9db; border: 1px solid #ffd43b; border-radius: 6px; margin-bottom: 1rem; }
   .warning p { margin-bottom: 0.5rem; font-size: 0.9rem; }
   .warning-actions { display: flex; gap: 0.5rem; }
+  .import-section { border-color: #a5d8ff; background: #f0f8ff; }
+  .import-row { display: flex; gap: 0.5rem; align-items: stretch; }
+  .import-url { flex: 1; padding: 0.45rem 0.6rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.85rem; }
+  .import-url:focus { outline: 2px solid #228be6; border-color: transparent; }
+  .btn-import {
+    padding: 0.45rem 1rem;
+    background: #228be6;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+  .btn-import:hover:not(:disabled) { background: #1c7ed6; }
+  .btn-import:disabled { opacity: 0.6; cursor: default; }
+  .import-error { margin-top: 0.5rem; font-size: 0.85rem; color: #c92a2a; }
+  .import-ok { margin-top: 0.5rem; font-size: 0.85rem; color: #2b8a3e; }
+  .import-extra { color: #495057; }
 </style>

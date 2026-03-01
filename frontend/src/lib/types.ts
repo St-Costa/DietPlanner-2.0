@@ -23,6 +23,7 @@ export interface Ingrediente extends NutritionPer100g {
   nome_unita: string | null;
   peso_unita: number | null;
   costo: number | null;
+  extra_nutrienti?: Record<string, { valore: number; unita: string }>;
   created_at: string;
   updated_at: string;
 }
@@ -99,4 +100,18 @@ export interface WSMessage {
 export interface SlugifyResponse {
   slug: string;
   available: boolean;
+}
+
+export interface ScrapeResult {
+  nome: string;
+  kcal: number;
+  proteine: number;
+  grassi: number;
+  saturi: number;
+  carboidrati: number;
+  fibre: number;
+  zuccheri: number;
+  sodio: number;
+  colesterolo: number;
+  extra_nutrienti: Record<string, { valore: number; unita: string }>;
 }
