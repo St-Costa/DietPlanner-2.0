@@ -10,6 +10,7 @@
   import MacroPieChart from "./MacroPieChart.svelte";
   import SpiderChart from "./SpiderChart.svelte";
   import type { SpiderEntry } from "./SpiderChart.svelte";
+  import OmegaBarChart from "./OmegaBarChart.svelte";
   import type { GiornataFull, GiornataRicettaDettaglio, GiornataInput } from "../types";
 
   function sodioColor(mg: number): string {
@@ -44,6 +45,7 @@
   let settingsOpen = $state(false);
   let editVitamine = $state<Record<string, string>>({});
   let editMinerali = $state<Record<string, string>>({});
+  let editOmega = $state({ omega3: "", omega6: "" });
 
   let totale = $derived(sumNutrition(ricetteSelezionate.map((r) => r.nutrizione)));
 
@@ -83,6 +85,20 @@
     ricetteSelezionate.some((r) => r.extra_nutrienti && Object.keys(r.extra_nutrienti).length > 0)
   );
 
+  let omegaData = $derived(() => {
+    const extra = computeGiornataExtra();
+    // Try aggregated keys first, otherwise sum individual n-3/n-6 fatty acids
+    if ("omega_3_fatty_acids" in extra || "omega_6_fatty_acids" in extra) {
+      return { omega3: extra["omega_3_fatty_acids"]?.valore ?? 0, omega6: extra["omega_6_fatty_acids"]?.valore ?? 0 };
+    }
+    let omega3 = 0, omega6 = 0;
+    for (const [key, { valore }] of Object.entries(extra)) {
+      if (key.includes("_n_3_")) omega3 += valore;
+      else if (key.includes("_n_6_")) omega6 += valore;
+    }
+    return { omega3, omega6 };
+  });
+
   let vitaminEntries = $derived<SpiderEntry[]>(() => {
     const extra = computeGiornataExtra();
     const targets = $settingsStore.vitamine;
@@ -114,6 +130,7 @@
     for (const def of MINERALI_DEF) {
       editMinerali[def.key] = String($settingsStore.minerali[def.key] ?? def.defaultTarget);
     }
+    editOmega = { omega3: String($settingsStore.omega.omega3), omega6: String($settingsStore.omega.omega6) };
     settingsOpen = true;
   }
 
@@ -126,6 +143,10 @@
       const v = parseFloat((editMinerali[def.key] ?? "").replace(",", "."));
       if (!isNaN(v) && v > 0) settingsStore.setTarget("minerali", def.key, v);
     }
+    const v3 = parseFloat(editOmega.omega3.replace(",", "."));
+    const v6 = parseFloat(editOmega.omega6.replace(",", "."));
+    if (!isNaN(v3) && v3 > 0) settingsStore.setOmegaTarget("omega3", v3);
+    if (!isNaN(v6) && v6 > 0) settingsStore.setOmegaTarget("omega6", v6);
     settingsOpen = false;
   }
 
@@ -133,6 +154,7 @@
     settingsStore.reset();
     for (const def of VITAMINE_DEF) editVitamine[def.key] = String(def.defaultTarget);
     for (const def of MINERALI_DEF) editMinerali[def.key] = String(def.defaultTarget);
+    editOmega = { omega3: "2", omega6: "10" };
   }
 
   // ─── Export MD ───────────────────────────────────────────────────────────────
@@ -299,6 +321,16 @@
             <SpiderChart entries={vitaminEntries()} title="Vitamine" />
             <SpiderChart entries={mineralEntries()} title="Minerali" />
           </div>
+          {#if omegaData().omega3 > 0 || omegaData().omega6 > 0}
+            <div class="omega-section">
+              <OmegaBarChart
+                omega3={omegaData().omega3}
+                omega6={omegaData().omega6}
+                omega3Target={$settingsStore.omega.omega3}
+                omega6Target={$settingsStore.omega.omega6}
+              />
+            </div>
+          {/if}
         </div>
       {/if}
     {:else}
@@ -349,6 +381,23 @@
               </div>
             </label>
           {/each}
+        </div>
+        <h4>Omega</h4>
+        <div class="targets-grid">
+          <label class="target-label">
+            <span class="target-name">Omega-3 totali</span>
+            <div class="target-input-wrap">
+              <input type="text" inputmode="decimal" bind:value={editOmega.omega3} class="target-input" />
+              <span class="target-unit">g</span>
+            </div>
+          </label>
+          <label class="target-label">
+            <span class="target-name">Omega-6 totali</span>
+            <div class="target-input-wrap">
+              <input type="text" inputmode="decimal" bind:value={editOmega.omega6} class="target-input" />
+              <span class="target-unit">g</span>
+            </div>
+          </label>
         </div>
       </div>
       <div class="modal-footer">
@@ -412,6 +461,7 @@
   .settings-btn:hover { background: #f1f3f5; }
   .spider-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
   @media (max-width: 640px) { .spider-charts { grid-template-columns: 1fr; } }
+  .omega-section { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #f1f3f5; max-width: 420px; }
 
   /* Settings modal */
   .modal-backdrop {

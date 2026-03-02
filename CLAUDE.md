@@ -63,6 +63,7 @@ lib/
     ├── MacroPieChart.svelte      # grafico a torta SVG (kcal da prot/carbo/grassi)
     ├── NutritionSummaryCard.svelte # riquadro nutrizione con MacroPieChart integrato
     ├── SpiderChart.svelte        # grafico radar SVG micronutrienti (valore vs obiettivo)
+    ├── OmegaBarChart.svelte      # barre ω-3/ω-6 con % su target + rapporto colorato
     ├── IngredienteForm.svelte    # form create/edit ingrediente
     ├── RicettaForm.svelte        # form create/edit ricetta con calcoli live
     └── GiornataForm.svelte       # form create/edit giornata
@@ -105,6 +106,16 @@ Sempre dinamico, mai salvato su disco:
 - Il pulsante **⚙ Obiettivi** apre un modal per modificare i target; condiviso tra ricette e giornate
 - In `GiornataForm`, `extra_nutrienti` arriva da `GiornataRicettaDettaglio.extra_nutrienti` (aggregato server-side da `enrichGiornata`)
 - Quando si aggiunge una ricetta al form giornata, `extra_nutrienti` viene passato da `RicettaFull.extra_nutrienti`
+
+### Grafico Omega-3 / Omega-6
+`RicettaForm` e `GiornataForm` mostrano `OmegaBarChart.svelte` sotto i grafici spider, quando almeno uno tra ω-3 e ω-6 è > 0.
+- Props: `omega3`, `omega6`, `omega3Target`, `omega6Target` (tutti in grammi)
+- nutritionvalue.org non espone chiavi aggregate: i valori si sommano dagli acidi grassi individuali per pattern di chiave (`_n_3_` → ω-3, `_n_6_` → ω-6). Se esistono le chiavi dirette `omega_3_fatty_acids`/`omega_6_fatty_acids` vengono usate quelle.
+- Barre scalate sull'obiettivo (100% = barra piena, capped visivamente al 150%; linea grigia a quota 100%)
+- ω-3: verde ≥100%, arancione ≥50%, rosso <50%; ω-6: neutro (il rapporto indica già la qualità)
+- Rapporto ω-6/ω-3: verde ≤4:1, arancione ≤10:1, rosso >10:1
+- Target default: ω-3 = 2g, ω-6 = 10g — modificabili dal modal **⚙ Obiettivi** (sezione "Omega")
+- `settingsStore` espone `omega: OmegaTargets` e metodo `setOmegaTarget(key, value)`
 
 ### Export MD giornata
 `GET /api/giornate/:id/export-md` → `text/markdown` con attachment.
@@ -170,3 +181,4 @@ I client reagiscono aggiornando lo store corrispondente.
 - `MacroPieChart` accetta `showGrams={true}` per mostrare i grammi in legenda
 - `SpiderChart` esporta `interface SpiderEntry` — importarla come `import type { SpiderEntry } from "./SpiderChart.svelte"`
 - `computeExtraAgg(ingredientiEntries, ingMap)` in `nutritionCalc.ts` aggrega `extra_nutrienti` scalando per grammi — usarla ogni volta che serve il totale micronutrienti di una ricetta
+- `OmegaBarChart` accetta `omega3`, `omega6`, `omega3Target`, `omega6Target` (g) — i target vengono da `$settingsStore.omega`

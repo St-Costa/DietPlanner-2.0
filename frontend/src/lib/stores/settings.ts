@@ -34,15 +34,22 @@ export const MINERALI_DEF: NutrientDef[] = [
   { key: "copper",     label: "Cu", labelFull: "Rame",     unita: "mg",  defaultTarget: 1.5   },
 ];
 
+export interface OmegaTargets {
+  omega3: number; // g/day  (default 2g — ALA + EPA/DHA)
+  omega6: number; // g/day  (default 10g — linoleic acid)
+}
+
 export interface SettingsState {
   vitamine: Record<string, number>;
   minerali: Record<string, number>;
+  omega: OmegaTargets;
 }
 
 function defaultTargets(): SettingsState {
   return {
     vitamine: Object.fromEntries(VITAMINE_DEF.map((d) => [d.key, d.defaultTarget])),
     minerali: Object.fromEntries(MINERALI_DEF.map((d) => [d.key, d.defaultTarget])),
+    omega: { omega3: 2, omega6: 10 },
   };
 }
 
@@ -57,6 +64,7 @@ function loadFromStorage(): SettingsState {
       return {
         vitamine: { ...defaults.vitamine, ...(parsed.vitamine ?? {}) },
         minerali: { ...defaults.minerali, ...(parsed.minerali ?? {}) },
+        omega: { ...defaults.omega, ...(parsed.omega ?? {}) },
       };
     }
   } catch {}
@@ -75,6 +83,13 @@ function createSettingsStore() {
     setTarget(group: "vitamine" | "minerali", key: string, value: number) {
       update((s) => {
         const next = { ...s, [group]: { ...s[group], [key]: value } };
+        persist(next);
+        return next;
+      });
+    },
+    setOmegaTarget(key: "omega3" | "omega6", value: number) {
+      update((s) => {
+        const next = { ...s, omega: { ...s.omega, [key]: value } };
         persist(next);
         return next;
       });
