@@ -18,6 +18,7 @@
   <a href="/ingredienti">Ingredienti</a>
   <a href="/ricette">Ricette</a>
   <a href="/giornate">Giornate</a>
+  <a href="/fabbisogno">Fabbisogno</a>
   <div class="ws-indicator" title={statusTitle}>
     <span class="dot" style="background:{statusColor}"></span>
     <span class="ws-label">{$wsStatus === "connected" ? "live" : $wsStatus}</span>

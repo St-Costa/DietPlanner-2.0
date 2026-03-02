@@ -130,6 +130,18 @@ Il bottone **↓ Esporta .md** è visibile nell'header di `GiornataForm` solo in
 - I 9 campi core vengono mappati direttamente; tutto il resto (vitamine, minerali, amminoacidi…) va in `extra_nutrienti?: Record<string, { valore: number; unita: string }>` sul tipo `Ingrediente`
 - `IngredienteForm` ha una sezione "Importa da URL" che pre-popola i campi; l'utente può modificare prima di salvare
 
+### Pagina Fabbisogno Calorico
+`frontend/src/routes/fabbisogno/+page.svelte` — calcolatore autonomo, nessuna API server.
+- **BMR** Harris-Benedict (uomo/donna), **TDEE** = BMR × moltiplicatore attività (1.0–1.5)
+- Preset calorie: +20%, +10%, mantenimento, −10%, −20% del TDEE; input custom
+- Macro target in **g/kg** di peso corporeo: proteine e carboidrati configurabili, grassi calcolati automaticamente dai kcal rimanenti
+- Distribuzione pasti su 3 scenari (coefficienti fissi derivati dal foglio Google originale):
+  - **Giorno di Riposo**: M1–M5
+  - **Allenamento Deficit**: M1, Pre-WO, Intra-WO, Post-WO, M4, M5
+  - **Allenamento Surplus**: stessa struttura con carbs ridistribuiti
+- Persistenza in `localStorage` con chiave `dietplanner_fabbisogno_v1`; salvataggio **esplicito** tramite pulsante (non auto-save)
+- Sistema basato su: https://www.youtube.com/watch?v=ELxTSv-5Ykg&t=335s
+
 ### Campi numerici nel form ingrediente
 I campi numerici usano `type="text"` con `inputmode="decimal"` anziché `type="number"`.
 Questo permette di digitare sia `","` che `"."` come separatore decimale.
