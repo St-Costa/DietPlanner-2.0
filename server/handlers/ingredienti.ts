@@ -56,13 +56,15 @@ export async function handleIngredienti(req: Request, url: URL, dataDir: string)
     // Check if switching to unit-based on an ingredient already used in recipes
     const existing = await fs.getIngrediente(dataDir, id);
     if (existing && !existing.nome_unita && body.nome_unita) {
-      const usedIn = await fs.ricetteUsingIngrediente(dataDir, id);
+      const usedInIds = await fs.ricetteUsingIngrediente(dataDir, id);
       const forceHeader = req.headers.get("x-force-unit-toggle");
-      if (usedIn.length > 0 && !forceHeader) {
+      if (usedInIds.length > 0 && !forceHeader) {
+        const allRicette = await fs.listRicette(dataDir);
+        const ricetteMap = new Map(allRicette.map((r) => [r.id, r.nome]));
+        const affectedNames = usedInIds.map((rid) => ricetteMap.get(rid) ?? rid);
         return json({
           warning: "unitToggleAffects",
-          affectedRecipes: usedIn,
-          message: `L'aggiunta di nome_unita influenzerà ${usedIn.length} ricette. Invia con header x-force-unit-toggle: true per confermare.`,
+          affectedRecipes: affectedNames,
         }, 409);
       }
     }

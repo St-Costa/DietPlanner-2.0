@@ -181,7 +181,7 @@
   });
 
   let listaIngredienti = $derived(() => {
-    const agg = new Map<string, { nome: string; pesoGrammi: number }>();
+    const agg = new Map<string, { nome: string; pesoGrammi: number; nome_unita: string | null; peso_unita: number | null }>();
     for (const rs of ricetteSelezionate) {
       const ricettaFull = $ricetteStore.find((r) => r.id === rs.id);
       if (!ricettaFull) continue;
@@ -190,7 +190,7 @@
         if (existing) {
           existing.pesoGrammi += ing.pesoGrammi;
         } else {
-          agg.set(ing.id, { nome: ing.nome, pesoGrammi: ing.pesoGrammi });
+          agg.set(ing.id, { nome: ing.nome, pesoGrammi: ing.pesoGrammi, nome_unita: ing.nome_unita, peso_unita: ing.peso_unita });
         }
       }
     }
@@ -471,9 +471,14 @@
           </div>
           <ul class="spesa-list">
             {#each listaIngredienti() as item}
+              {@const totalGrammi = item.pesoGrammi * spesaMoltiplicatore}
               <li>
                 <span class="spesa-nome">{item.nome}</span>
-                <span class="spesa-qty">{(item.pesoGrammi * spesaMoltiplicatore).toFixed(0)} g</span>
+                {#if item.nome_unita && item.peso_unita}
+                  <span class="spesa-qty">{+(totalGrammi / item.peso_unita).toFixed(2)} {item.nome_unita}</span>
+                {:else}
+                  <span class="spesa-qty">{totalGrammi.toFixed(0)} g</span>
+                {/if}
               </li>
             {/each}
           </ul>

@@ -47,7 +47,7 @@
   let error = $state<string | null>(null);
   let loading = $state(false);
   let deleteConfirm = $state(false);
-  let conflictWarning = $state<{ affectedRecipes: string[]; message: string } | null>(null);
+  let conflictWarning = $state<{ affectedRecipes: string[] } | null>(null);
 
   // Import from nutritionvalue.org
   let importUrl = $state("");
@@ -134,7 +134,6 @@
         if (e.status === 409 && e.body.warning === "unitToggleAffects") {
           conflictWarning = {
             affectedRecipes: e.body.affectedRecipes as string[],
-            message: e.body.message as string,
           };
         } else {
           error = String(e.body.error ?? e.message);
@@ -234,8 +233,8 @@
 
   {#if conflictWarning}
     <div class="warning">
-      <p>{conflictWarning.message}</p>
-      <p>Ricette interessate: {conflictWarning.affectedRecipes.join(", ")}</p>
+      <p>Questo ingrediente è usato nelle seguenti ricette: <strong>{conflictWarning.affectedRecipes.join(", ")}</strong>.</p>
+      <p>Le quantità nelle ricette rimarranno in grammi; la lista della spesa le convertirà automaticamente in unità.</p>
       <div class="warning-actions">
         <button type="button" onclick={forceUpdate} class="btn-danger">Procedi comunque</button>
         <button type="button" onclick={() => (conflictWarning = null)}>Annulla</button>
