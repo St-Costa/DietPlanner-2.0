@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import MacroPieChart from '$lib/components/MacroPieChart.svelte';
-
-  const STORAGE_KEY = 'dietplanner_fabbisogno_v1';
+  import { api } from '$lib/api';
 
   // ── Input states ──────────────────────────────────────────────────────────
   let sesso         = $state<'M' | 'F'>('M');
@@ -15,7 +14,6 @@
   let preset_idx    = $state<number | null>(null); // null = usa tdee o custom
   let s_cal_custom  = $state('');
   let tipo_giorno   = $state<'off' | 'deficit' | 'surplus'>('off');
-  let dirty         = $state(false);
   let saved_flash   = $state(false);
 
   function parseNum(s: string): number {
@@ -23,34 +21,39 @@
     return isNaN(n) ? 0 : n;
   }
 
-  function save() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+  // ── Auto-save debounced ───────────────────────────────────────────────────
+  let initialized = false;
+  let saveTimer: ReturnType<typeof setTimeout>;
+
+  function autoSave() {
+    if (!initialized) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      api.fabbisogno.save({
         sesso, s_altezza, s_peso, s_eta, multiplier,
         s_prot, s_carbs, preset_idx, s_cal_custom, tipo_giorno,
-      }));
-    } catch {}
-    dirty = false;
-    saved_flash = true;
-    setTimeout(() => { saved_flash = false; }, 2000);
+      }).then(() => {
+        saved_flash = true;
+        setTimeout(() => { saved_flash = false; }, 1500);
+      }).catch(() => {});
+    }, 600);
   }
 
-  onMount(() => {
+  onMount(async () => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const d = JSON.parse(raw);
-      if (d.sesso)         sesso        = d.sesso;
-      if (d.s_altezza)     s_altezza    = d.s_altezza;
-      if (d.s_peso)        s_peso       = d.s_peso;
-      if (d.s_eta)         s_eta        = d.s_eta;
-      if (d.multiplier != null) multiplier = d.multiplier;
-      if (d.s_prot)        s_prot       = d.s_prot;
-      if (d.s_carbs)       s_carbs      = d.s_carbs;
-      if (d.preset_idx != null) preset_idx = d.preset_idx;
-      if (d.s_cal_custom != null) s_cal_custom = d.s_cal_custom;
-      if (d.tipo_giorno)   tipo_giorno  = d.tipo_giorno;
+      const d = await api.fabbisogno.load();
+      if (d.sesso)              sesso        = d.sesso as 'M' | 'F';
+      if (d.s_altezza)          s_altezza    = d.s_altezza as string;
+      if (d.s_peso)             s_peso       = d.s_peso as string;
+      if (d.s_eta)              s_eta        = d.s_eta as string;
+      if (d.multiplier != null) multiplier   = d.multiplier as number;
+      if (d.s_prot)             s_prot       = d.s_prot as string;
+      if (d.s_carbs)            s_carbs      = d.s_carbs as string;
+      if (d.preset_idx != null) preset_idx   = d.preset_idx as number | null;
+      if (d.s_cal_custom != null) s_cal_custom = d.s_cal_custom as string;
+      if (d.tipo_giorno)        tipo_giorno  = d.tipo_giorno as 'off' | 'deficit' | 'surplus';
     } catch {}
+    initialized = true;
   });
 
   // ── Derivazioni ───────────────────────────────────────────────────────────
@@ -151,13 +154,13 @@
   function selectPreset(idx: number) {
     preset_idx   = idx;
     s_cal_custom = '';
-    dirty = true;
+    autoSave();
   }
 
   function onCustomInput(e: Event) {
     s_cal_custom = (e.currentTarget as HTMLInputElement).value;
     preset_idx   = null;
-    dirty = true;
+    autoSave();
   }
 </script>
 
@@ -167,9 +170,7 @@
       <h1>Calcolatore Fabbisogno Calorico</h1>
       <p class="source">Sistema basato su <a href="https://www.youtube.com/watch?v=ELxTSv-5Ykg&t=335s" target="_blank" rel="noopener">questo video</a></p>
     </div>
-    <button class="save-btn" class:flash={saved_flash} disabled={!dirty} onclick={save}>
-      {saved_flash ? '✓ Salvato' : 'Salva'}
-    </button>
+    <span class="autosave-badge" class:visible={saved_flash}>✓ Salvato</span>
   </div>
 
   <!-- ── Sezione 1: dati personali + attività ───────────────────────────── -->
@@ -180,8 +181,8 @@
       <div class="field">
         <label>Sesso</label>
         <div class="toggle-group">
-          <button class:active={sesso === 'M'} onclick={() => { sesso = 'M'; dirty = true; }}>Uomo</button>
-          <button class:active={sesso === 'F'} onclick={() => { sesso = 'F'; dirty = true; }}>Donna</button>
+          <button class:active={sesso === 'M'} onclick={() => { sesso = 'M'; autoSave(); }}>Uomo</button>
+          <button class:active={sesso === 'F'} onclick={() => { sesso = 'F'; autoSave(); }}>Donna</button>
         </div>
       </div>
 
@@ -189,17 +190,17 @@
         <div class="field">
           <label>Altezza (cm)</label>
           <input type="text" inputmode="decimal" value={s_altezza}
-            oninput={(e) => { s_altezza = (e.currentTarget as HTMLInputElement).value; dirty = true; }} />
+            oninput={(e) => { s_altezza = (e.currentTarget as HTMLInputElement).value; autoSave(); }} />
         </div>
         <div class="field">
           <label>Peso (kg)</label>
           <input type="text" inputmode="decimal" value={s_peso}
-            oninput={(e) => { s_peso = (e.currentTarget as HTMLInputElement).value; dirty = true; }} />
+            oninput={(e) => { s_peso = (e.currentTarget as HTMLInputElement).value; autoSave(); }} />
         </div>
         <div class="field">
           <label>Età</label>
           <input type="text" inputmode="numeric" value={s_eta}
-            oninput={(e) => { s_eta = (e.currentTarget as HTMLInputElement).value; dirty = true; }} />
+            oninput={(e) => { s_eta = (e.currentTarget as HTMLInputElement).value; autoSave(); }} />
         </div>
       </div>
 
@@ -209,7 +210,7 @@
           <button
             class="activity-btn"
             class:active={multiplier === a.value}
-            onclick={() => { multiplier = a.value; dirty = true; }}
+            onclick={() => { multiplier = a.value; autoSave(); }}
           >
             <span class="a-label">{a.label}</span>
             <span class="a-desc">{a.desc}</span>
@@ -278,12 +279,12 @@
       <div class="field">
         <label>Proteine (g/kg)</label>
         <input type="text" inputmode="decimal" value={s_prot}
-          oninput={(e) => { s_prot = (e.currentTarget as HTMLInputElement).value; dirty = true; }} />
+          oninput={(e) => { s_prot = (e.currentTarget as HTMLInputElement).value; autoSave(); }} />
       </div>
       <div class="field">
         <label>Carboidrati (g/kg)</label>
         <input type="text" inputmode="decimal" value={s_carbs}
-          oninput={(e) => { s_carbs = (e.currentTarget as HTMLInputElement).value; dirty = true; }} />
+          oninput={(e) => { s_carbs = (e.currentTarget as HTMLInputElement).value; autoSave(); }} />
       </div>
     </div>
 
@@ -344,13 +345,13 @@
     <h2>Distribuzione Pasti</h2>
 
     <div class="tabs">
-      <button class:active={tipo_giorno === 'off'}     onclick={() => { tipo_giorno = 'off'; dirty = true; }}>
+      <button class:active={tipo_giorno === 'off'}     onclick={() => { tipo_giorno = 'off'; autoSave(); }}>
         Giorno di Riposo
       </button>
-      <button class:active={tipo_giorno === 'deficit'} onclick={() => { tipo_giorno = 'deficit'; dirty = true; }}>
+      <button class:active={tipo_giorno === 'deficit'} onclick={() => { tipo_giorno = 'deficit'; autoSave(); }}>
         Allenamento — Deficit
       </button>
-      <button class:active={tipo_giorno === 'surplus'} onclick={() => { tipo_giorno = 'surplus'; dirty = true; }}>
+      <button class:active={tipo_giorno === 'surplus'} onclick={() => { tipo_giorno = 'surplus'; autoSave(); }}>
         Allenamento — Surplus
       </button>
     </div>
@@ -407,21 +408,15 @@
   .source { font-size: 0.78rem; color: #868e96; }
   .source a { color: #228be6; text-decoration: none; }
   .source a:hover { text-decoration: underline; }
-  .save-btn {
-    padding: 0.45rem 1.1rem;
-    border: none;
-    border-radius: 6px;
-    background: #228be6;
-    color: #fff;
-    font-size: 0.875rem;
+  .autosave-badge {
+    font-size: 0.8rem;
+    color: #40c057;
     font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 0.2s;
+    opacity: 0;
+    transition: opacity 0.3s;
     white-space: nowrap;
   }
-  .save-btn:disabled { background: #adb5bd; cursor: default; }
-  .save-btn.flash { background: #40c057; }
+  .autosave-badge.visible { opacity: 1; }
 
   .card {
     background: #fff;

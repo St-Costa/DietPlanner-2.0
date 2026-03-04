@@ -92,6 +92,12 @@ export const api = {
       body: JSON.stringify({ url }),
     }),
 
+  fabbisogno: {
+    load: () => request<Record<string, unknown>>("/api/fabbisogno"),
+    save: (data: Record<string, unknown>) =>
+      request<{ ok: true }>("/api/fabbisogno", { method: "PUT", body: JSON.stringify(data) }),
+  },
+
   listaSpesa: {
     genera: async (selezione: ShoppingListSelezione[]): Promise<string> => {
       const res = await fetch("/api/lista-spesa", {
