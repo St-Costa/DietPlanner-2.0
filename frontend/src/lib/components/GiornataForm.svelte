@@ -358,7 +358,7 @@
           <tbody>
             {#each ricetteSelezionate as r}
               {@const n = r.nutrizione}
-              <tr>
+              <tr class="ricetta-row" onclick={() => goto(`/ricette/${r.id}`)}>
                 <td>{r.nome}</td>
                 <td class="num">{n.kcal.toFixed(0)}</td>
                 <td class="num">{n.proteine.toFixed(1)}</td>
@@ -367,7 +367,7 @@
                 <td class="num">{n.fibre.toFixed(1)}</td>
                 <td class="num">{n.sodio.toFixed(0)}</td>
                 <td class="num">{n.colesterolo.toFixed(0)}</td>
-                <td>
+                <td onclick={(e) => e.stopPropagation()}>
                   <button type="button" class="rm-btn" onclick={() => removeRicetta(r.id)}>✕</button>
                 </td>
               </tr>
@@ -554,6 +554,8 @@
   td.label { font-weight: 500; text-align: left; }
   td.num { text-align: center; }
   .sub { color: #868e96; font-size: 0.8em; }
+  .ricetta-row { cursor: pointer; }
+  .ricetta-row:hover td { background: #e7f5ff; }
   .rm-btn { background: none; border: none; cursor: pointer; color: #868e96; font-size: 0.85rem; padding: 0.2rem 0.4rem; }
   .rm-btn:hover { color: #fa5252; }
   .total-row td { font-weight: 700; font-size: 1.05rem; background: #f8f9fa; border-top: 2px solid #dee2e6; border-bottom: none; }
