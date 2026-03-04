@@ -43,12 +43,11 @@
 {:else}
   <div class="cards">
     {#each $giornateStore as g}
-      <div class="day-card">
+      <div class="day-card" role="button" tabindex="0" onclick={() => goto(`/giornate/${g.id}`)} onkeydown={(e) => e.key === 'Enter' && goto(`/giornate/${g.id}`)}>
         <div class="day-header">
           <div class="day-nome">{g.nome}</div>
           <div class="card-actions">
-            <button class="edit-btn" onclick={() => goto(`/giornate/${g.id}`)}>Modifica</button>
-            <button class="delete-btn" title="Elimina giornata" onclick={() => handleDelete(g)}>
+            <button class="delete-btn" title="Elimina giornata" onclick={(e) => { e.stopPropagation(); handleDelete(g); }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
@@ -118,12 +117,11 @@
   .btn-primary:hover { background: #1c7ed6; }
   .empty { color: #868e96; }
   .cards { display: flex; flex-direction: column; gap: 1.25rem; }
-  .day-card { background: #fff; border: 1px solid #dee2e6; border-radius: 10px; padding: 1.25rem; }
+  .day-card { background: #fff; border: 1px solid #dee2e6; border-radius: 10px; padding: 1.25rem; cursor: pointer; }
+  .day-card:hover { border-color: #adb5bd; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
   .day-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
   .day-nome { font-size: 1.1rem; font-weight: 700; }
   .card-actions { display: flex; align-items: center; gap: 0.4rem; }
-  .edit-btn { padding: 0.35rem 0.75rem; border: 1px solid #dee2e6; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.85rem; }
-  .edit-btn:hover { background: #f1f3f5; }
   .delete-btn { background: none; border: 1px solid #dee2e6; border-radius: 6px; cursor: pointer; color: #fa5252; padding: 0.35rem 0.45rem; display: inline-flex; align-items: center; opacity: 0.7; }
   .delete-btn:hover { opacity: 1; background: #fff5f5; border-color: #ffa8a8; }
   .ricette-list { list-style: none; padding: 0; margin: 0 0 0.75rem 0; display: flex; flex-direction: column; gap: 0; }

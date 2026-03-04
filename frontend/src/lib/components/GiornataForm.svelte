@@ -99,6 +99,44 @@
     return { omega3, omega6 };
   });
 
+  const MOLT_KEY = "dietplanner_spesa_molt_v1";
+  function loadMolt(id: string): number {
+    try {
+      const map = JSON.parse(localStorage.getItem(MOLT_KEY) ?? "{}") as Record<string, number>;
+      return map[id] ?? 1;
+    } catch { return 1; }
+  }
+  function saveMolt(id: string, v: number) {
+    try {
+      const map = JSON.parse(localStorage.getItem(MOLT_KEY) ?? "{}") as Record<string, number>;
+      map[id] = v;
+      localStorage.setItem(MOLT_KEY, JSON.stringify(map));
+    } catch {}
+  }
+
+  let spesaMoltiplicatore = $state(giornata?.id ? loadMolt(giornata.id) : 1);
+
+  $effect(() => {
+    if (giornata?.id) saveMolt(giornata.id, spesaMoltiplicatore);
+  });
+
+  let listaIngredienti = $derived(() => {
+    const agg = new Map<string, { nome: string; pesoGrammi: number }>();
+    for (const rs of ricetteSelezionate) {
+      const ricettaFull = $ricetteStore.find((r) => r.id === rs.id);
+      if (!ricettaFull) continue;
+      for (const ing of ricettaFull.ingredientiDettaglio) {
+        const existing = agg.get(ing.id);
+        if (existing) {
+          existing.pesoGrammi += ing.pesoGrammi;
+        } else {
+          agg.set(ing.id, { nome: ing.nome, pesoGrammi: ing.pesoGrammi });
+        }
+      }
+    }
+    return Array.from(agg.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+  });
+
   let vitaminEntries = $derived<SpiderEntry[]>(() => {
     const extra = computeGiornataExtra();
     const targets = $settingsStore.vitamine;
@@ -333,6 +371,36 @@
           {/if}
         </div>
       {/if}
+
+      {#if listaIngredienti().length > 0}
+        <div class="spesa-section">
+          <div class="spesa-header">
+            <span class="spesa-title">Ingredienti</span>
+            <label class="spesa-molt-label">
+              × <input
+                type="text"
+                inputmode="decimal"
+                class="spesa-molt-input"
+                value={spesaMoltiplicatore}
+                oninput={(e) => {
+                  const v = parseFloat((e.currentTarget.value).replace(",", "."));
+                  if (!isNaN(v) && v > 0) spesaMoltiplicatore = v;
+                }}
+                title="Moltiplicatore giorni"
+              />
+              <span class="spesa-molt-hint">giorni</span>
+            </label>
+          </div>
+          <ul class="spesa-list">
+            {#each listaIngredienti() as item}
+              <li>
+                <span class="spesa-nome">{item.nome}</span>
+                <span class="spesa-qty">{(item.pesoGrammi * spesaMoltiplicatore).toFixed(0)} g</span>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
     {:else}
       <p class="empty">Nessuna ricetta aggiunta. Cerca sopra per aggiungerne.</p>
     {/if}
@@ -462,6 +530,20 @@
   .spider-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
   @media (max-width: 640px) { .spider-charts { grid-template-columns: 1fr; } }
   .omega-section { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #f1f3f5; max-width: 420px; }
+
+  /* Shopping list */
+  .spesa-section { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #f1f3f5; }
+  .spesa-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+  .spesa-title { font-size: 0.85rem; font-weight: 600; color: #495057; }
+  .spesa-molt-label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.82rem; color: #868e96; }
+  .spesa-molt-input { width: 44px; padding: 0.2rem 0.35rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.85rem; text-align: center; }
+  .spesa-molt-input:focus { outline: 2px solid #228be6; border-color: transparent; }
+  .spesa-molt-hint { font-size: 0.78rem; color: #adb5bd; }
+  .spesa-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0; }
+  .spesa-list li { display: flex; justify-content: space-between; align-items: center; padding: 0.25rem 0; border-bottom: 1px solid #f1f3f5; font-size: 0.875rem; }
+  .spesa-list li:last-child { border-bottom: none; }
+  .spesa-nome { color: #212529; }
+  .spesa-qty { color: #868e96; font-variant-numeric: tabular-nums; }
 
   /* Settings modal */
   .modal-backdrop {
