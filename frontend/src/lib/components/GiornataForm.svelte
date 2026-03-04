@@ -41,6 +41,22 @@
   let loading = $state(false);
   let deleteConfirm = $state(false);
 
+  // ─── Drag & drop reorder ─────────────────────────────────────────────────
+  let draggingId = $state<string | null>(null);
+  let dragOverId = $state<string | null>(null);
+
+  function handleDrop(targetId: string) {
+    if (!draggingId || draggingId === targetId) return;
+    const oldIdx = ricetteSelezionate.findIndex((r) => r.id === draggingId);
+    const newIdx = ricetteSelezionate.findIndex((r) => r.id === targetId);
+    if (oldIdx === -1 || newIdx === -1) return;
+    const arr = [...ricetteSelezionate];
+    const [item] = arr.splice(oldIdx, 1);
+    arr.splice(newIdx, 0, item);
+    ricetteSelezionate = arr;
+    saveNow();
+  }
+
   // ─── Auto-save (edit mode only) ───────────────────────────────────────────
   let initialized = false;
   let autoSaveTimer: ReturnType<typeof setTimeout> | undefined = undefined;
@@ -358,7 +374,17 @@
           <tbody>
             {#each ricetteSelezionate as r}
               {@const n = r.nutrizione}
-              <tr class="ricetta-row" onclick={() => goto(`/ricette/${r.id}`)}>
+              <tr
+                class="ricetta-row"
+                class:row-dragging={draggingId === r.id}
+                class:row-drag-over={dragOverId === r.id && draggingId !== r.id}
+                draggable={true}
+                ondragstart={(e) => { draggingId = r.id; e.dataTransfer?.setData('text/plain', r.id); }}
+                ondragover={(e) => { e.preventDefault(); dragOverId = r.id; }}
+                ondrop={(e) => { e.preventDefault(); handleDrop(r.id); draggingId = null; dragOverId = null; }}
+                ondragend={() => { draggingId = null; dragOverId = null; }}
+                onclick={() => goto(`/ricette/${r.id}`)}
+              >
                 <td>{r.nome}</td>
                 <td class="num">{n.kcal.toFixed(0)}</td>
                 <td class="num">{n.proteine.toFixed(1)}</td>
@@ -367,7 +393,8 @@
                 <td class="num">{n.fibre.toFixed(1)}</td>
                 <td class="num">{n.sodio.toFixed(0)}</td>
                 <td class="num">{n.colesterolo.toFixed(0)}</td>
-                <td onclick={(e) => e.stopPropagation()}>
+                <td class="action-cell" onclick={(e) => e.stopPropagation()}>
+                  <span class="drag-handle" title="Trascina per riordinare">⠿</span>
                   <button type="button" class="rm-btn" onclick={() => removeRicetta(r.id)}>✕</button>
                 </td>
               </tr>
@@ -556,8 +583,14 @@
   .sub { color: #868e96; font-size: 0.8em; }
   .ricetta-row { cursor: pointer; }
   .ricetta-row:hover td { background: #e7f5ff; }
+  .action-cell { display: flex; align-items: center; justify-content: center; gap: 0.1rem; }
+  .drag-handle { cursor: grab; color: #adb5bd; font-size: 1rem; padding: 0.2rem 0.3rem; user-select: none; line-height: 1; }
+  .drag-handle:hover { color: #495057; }
+  .drag-handle:active { cursor: grabbing; }
   .rm-btn { background: none; border: none; cursor: pointer; color: #868e96; font-size: 0.85rem; padding: 0.2rem 0.4rem; }
   .rm-btn:hover { color: #fa5252; }
+  .row-dragging { opacity: 0.4; }
+  .row-drag-over td { background: #e7f5ff !important; box-shadow: inset 0 2px 0 #228be6; }
   .total-row td { font-weight: 700; font-size: 1.05rem; background: #f8f9fa; border-top: 2px solid #dee2e6; border-bottom: none; }
   .health-ok { color: #2f9e44; font-weight: 700; }
   .health-warn { color: #e67700; font-weight: 700; }
