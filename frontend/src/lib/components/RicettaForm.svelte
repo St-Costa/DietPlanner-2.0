@@ -3,7 +3,7 @@
   import { api, ApiError } from "../api";
   import { ingredientiStore } from "../stores/ingredienti";
   import { ricetteStore } from "../stores/ricette";
-  import { goto } from "$app/navigation";
+  import { goto, beforeNavigate } from "$app/navigation";
   import { scaleNutrition, toGrams, sumNutrition, zeroNutrition } from "../utils/nutrition";
   import MarkdownEditor from "./MarkdownEditor.svelte";
   import IngredientPicker from "./IngredientPicker.svelte";
@@ -30,6 +30,46 @@
   let loading = $state(false);
   let deleteConfirm = $state(false);
 
+  // ─── Auto-save (edit mode only) ───────────────────────────────────────────
+  let initialized = false;
+  let autoSaveTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+  let pendingSave = false;
+  let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  async function saveNow() {
+    if (!initialized || !isEdit || !ricetta) return;
+    if (autoSaveTimer !== undefined) { clearTimeout(autoSaveTimer); autoSaveTimer = undefined; }
+    pendingSave = false;
+    saveStatus = 'saving';
+    try {
+      await api.ricette.update(ricetta!.id, { nome, ingredienti: buildIngredienteEntries(), preparazione });
+      saveStatus = 'saved';
+      setTimeout(() => { if (saveStatus === 'saved') saveStatus = 'idle'; }, 2000);
+    } catch {
+      saveStatus = 'error';
+    }
+  }
+
+  function scheduleAutoSave() {
+    if (!initialized || !isEdit || !ricetta) return;
+    if (autoSaveTimer !== undefined) clearTimeout(autoSaveTimer);
+    pendingSave = true;
+    autoSaveTimer = setTimeout(() => { autoSaveTimer = undefined; saveNow(); }, 300);
+  }
+
+  $effect(() => {
+    // Track only text/quantita — discrete actions (add/remove) call saveNow() directly
+    const _deps = [nome, preparazione, ...rows.map(r => r.quantita)];
+    scheduleAutoSave();
+    return () => { if (autoSaveTimer !== undefined) clearTimeout(autoSaveTimer); };
+  });
+
+  beforeNavigate(({ cancel, to }) => {
+    if (!pendingSave) return;
+    cancel();
+    saveNow().then(() => { if (to) goto(to.url.pathname + to.url.search + to.url.hash); });
+  });
+
   // Settings modal state
   let settingsOpen = $state(false);
   let editVitamine = $state<Record<string, string>>({});
@@ -53,15 +93,19 @@
         })
         .filter((r): r is Row => r !== null);
     }
+    // Enable auto-save after mount effects flush (setTimeout > microtasks)
+    setTimeout(() => { initialized = true; }, 0);
   });
 
   function addIngrediente(ing: Ingrediente) {
     if (rows.some((r) => r.ing.id === ing.id)) return; // already added
     rows = [...rows, { ing, quantita: ing.peso_unita ? 1 : 100 }];
+    saveNow();
   }
 
   function removeRow(idx: number) {
     rows = rows.filter((_, i) => i !== idx);
+    saveNow();
   }
 
   function buildIngredienteEntries(): RicettaIngrediente[] {
@@ -174,15 +218,16 @@
   }
 
   async function handleSubmit() {
+    if (isEdit) {
+      // In edit mode the form has no submit button; Enter key or programmatic submit just navigates back.
+      // beforeNavigate will flush any pending debounced save automatically.
+      goto("/ricette");
+      return;
+    }
     error = null;
     loading = true;
     try {
-      const input = { nome, ingredienti: buildIngredienteEntries(), preparazione };
-      if (isEdit && ricetta) {
-        await api.ricette.update(ricetta.id, input);
-      } else {
-        await api.ricette.create(input);
-      }
+      await api.ricette.create({ nome, ingredienti: buildIngredienteEntries(), preparazione });
       await ricetteStore.reload();
       goto("/ricette");
     } catch (e) {
@@ -218,10 +263,17 @@
   <div class="form-header">
     <h1>{isEdit ? "Modifica Ricetta" : "Nuova Ricetta"}</h1>
     <div class="header-actions">
-      <button type="submit" class="btn-primary" disabled={loading}>
-        {loading ? "Salvataggio..." : isEdit ? "Salva" : "Crea ricetta"}
-      </button>
-      <a href="/ricette" class="btn-secondary">Annulla</a>
+      {#if isEdit && saveStatus !== 'idle'}
+        <span class="save-status save-status-{saveStatus}">
+          {saveStatus === 'saving' ? 'Salvataggio...' : saveStatus === 'saved' ? '✓ Salvato' : '⚠ Errore salvataggio'}
+        </span>
+      {/if}
+      {#if !isEdit}
+        <button type="submit" class="btn-primary" disabled={loading}>
+          {loading ? "Creazione..." : "Crea ricetta"}
+        </button>
+      {/if}
+      <a href="/ricette" class="btn-secondary">{isEdit ? 'Indietro' : 'Annulla'}</a>
     </div>
   </div>
 
@@ -416,7 +468,11 @@
   .form-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
   h1 { font-size: 1.5rem; }
   h2 { font-size: 1rem; margin-bottom: 0.75rem; color: #495057; }
-  .header-actions { display: flex; gap: 0.5rem; }
+  .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+  .save-status { font-size: 0.82rem; }
+  .save-status-saving { color: #868e96; }
+  .save-status-saved { color: #2f9e44; }
+  .save-status-error { color: #c92a2a; font-weight: 500; }
   .nome-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; font-weight: 500; margin-bottom: 1.25rem; }
   .nome-input { padding: 0.55rem 0.75rem; border: 1px solid #ced4da; border-radius: 6px; font-size: 1.1rem; }
   .nome-input:focus { outline: 2px solid #228be6; border-color: transparent; }

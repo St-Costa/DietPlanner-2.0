@@ -3,7 +3,7 @@
   import { api, ApiError } from "../api";
   import { ricetteStore } from "../stores/ricette";
   import { giornateStore } from "../stores/giornate";
-  import { goto } from "$app/navigation";
+  import { goto, beforeNavigate } from "$app/navigation";
   import { sumNutrition, fmt } from "../utils/nutrition";
   import { settingsStore, VITAMINE_DEF, MINERALI_DEF } from "../stores/settings";
   import RecipePicker from "./RecipePicker.svelte";
@@ -41,6 +41,46 @@
   let loading = $state(false);
   let deleteConfirm = $state(false);
 
+  // ─── Auto-save (edit mode only) ───────────────────────────────────────────
+  let initialized = false;
+  let autoSaveTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+  let pendingSave = false;
+  let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  async function saveNow() {
+    if (!initialized || !isEdit || !giornata) return;
+    if (autoSaveTimer !== undefined) { clearTimeout(autoSaveTimer); autoSaveTimer = undefined; }
+    pendingSave = false;
+    saveStatus = 'saving';
+    try {
+      await api.giornate.update(giornata!.id, buildInput());
+      saveStatus = 'saved';
+      setTimeout(() => { if (saveStatus === 'saved') saveStatus = 'idle'; }, 2000);
+    } catch {
+      saveStatus = 'error';
+    }
+  }
+
+  function scheduleAutoSave() {
+    if (!initialized || !isEdit || !giornata) return;
+    if (autoSaveTimer !== undefined) clearTimeout(autoSaveTimer);
+    pendingSave = true;
+    autoSaveTimer = setTimeout(() => { autoSaveTimer = undefined; saveNow(); }, 300);
+  }
+
+  $effect(() => {
+    // Track only text — discrete actions (add/remove ricetta) call saveNow() directly
+    const _deps = [nome];
+    scheduleAutoSave();
+    return () => { if (autoSaveTimer !== undefined) clearTimeout(autoSaveTimer); };
+  });
+
+  beforeNavigate(({ cancel, to }) => {
+    if (!pendingSave) return;
+    cancel();
+    saveNow().then(() => { if (to) goto(to.url.pathname + to.url.search + to.url.hash); });
+  });
+
   // Settings modal state
   let settingsOpen = $state(false);
   let editVitamine = $state<Record<string, string>>({});
@@ -51,15 +91,19 @@
 
   onMount(async () => {
     await ricetteStore.load();
+    // Enable auto-save after mount effects flush (setTimeout > microtasks)
+    setTimeout(() => { initialized = true; }, 0);
   });
 
   function addRicetta(r: { id: string; nome: string; nutrizione: GiornataRicettaDettaglio["nutrizione"]; extra_nutrienti?: GiornataRicettaDettaglio["extra_nutrienti"] }) {
     if (ricetteSelezionate.some((s) => s.id === r.id)) return;
     ricetteSelezionate = [...ricetteSelezionate, { id: r.id, nome: r.nome, nutrizione: r.nutrizione, extra_nutrienti: r.extra_nutrienti }];
+    saveNow();
   }
 
   function removeRicetta(id: string) {
     ricetteSelezionate = ricetteSelezionate.filter((r) => r.id !== id);
+    saveNow();
   }
 
   function buildInput(): GiornataInput {
@@ -219,15 +263,15 @@
   // ─── CRUD handlers ───────────────────────────────────────────────────────────
 
   async function handleSubmit() {
+    if (isEdit) {
+      // In edit mode the form has no submit button; beforeNavigate flushes any pending save.
+      goto("/giornate");
+      return;
+    }
     error = null;
     loading = true;
     try {
-      const input = buildInput();
-      if (isEdit && giornata) {
-        await api.giornate.update(giornata.id, input);
-      } else {
-        await api.giornate.create(input);
-      }
+      await api.giornate.create(buildInput());
       await giornateStore.reload();
       goto("/giornate");
     } catch (e) {
@@ -261,10 +305,17 @@
           ↓ Esporta .md
         </button>
       {/if}
-      <button type="submit" class="btn-primary" disabled={loading}>
-        {loading ? "Salvataggio..." : isEdit ? "Salva" : "Crea giornata"}
-      </button>
-      <a href="/giornate" class="btn-secondary">Annulla</a>
+      {#if isEdit && saveStatus !== 'idle'}
+        <span class="save-status save-status-{saveStatus}">
+          {saveStatus === 'saving' ? 'Salvataggio...' : saveStatus === 'saved' ? '✓ Salvato' : '⚠ Errore salvataggio'}
+        </span>
+      {/if}
+      {#if !isEdit}
+        <button type="submit" class="btn-primary" disabled={loading}>
+          {loading ? "Creazione..." : "Crea giornata"}
+        </button>
+      {/if}
+      <a href="/giornate" class="btn-secondary">{isEdit ? 'Indietro' : 'Annulla'}</a>
     </div>
   </div>
 
@@ -486,6 +537,10 @@
   h1 { font-size: 1.5rem; }
   h2 { font-size: 1rem; margin-bottom: 0.75rem; color: #495057; }
   .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+  .save-status { font-size: 0.82rem; }
+  .save-status-saving { color: #868e96; }
+  .save-status-saved { color: #2f9e44; }
+  .save-status-error { color: #c92a2a; font-weight: 500; }
   .nome-wrap { margin-bottom: 1.25rem; max-width: 400px; }
   label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; font-weight: 500; }
   input { padding: 0.45rem 0.6rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9rem; }
