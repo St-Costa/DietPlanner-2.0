@@ -117,6 +117,15 @@ Sempre dinamico, mai salvato su disco:
 - Target default: ω-3 = 2g, ω-6 = 10g — modificabili dal modal **⚙ Obiettivi** (sezione "Omega")
 - `settingsStore` espone `omega: OmegaTargets` e metodo `setOmegaTarget(key, value)`
 
+### Auto-save in RicettaForm e GiornataForm
+Entrambi i form salvano automaticamente in **modalità modifica** (mai in create mode).
+- **Testo** (`nome`, `preparazione`, `quantita`): debounce 300ms tramite `scheduleAutoSave()` in `$effect`
+- **Azioni discrete** (aggiunta/rimozione ingrediente o ricetta): `saveNow()` immediato
+- **`beforeNavigate`** intercetta qualsiasi navigazione SvelteKit (freccia browser, link, `goto`): se `pendingSave=true` cancella la nav, salva, poi riprende
+- Indicatore nell'header: "Salvataggio..." / "✓ Salvato" / "⚠ Errore salvataggio" (sparisce dopo 2s)
+- Pulsante "Salva" assente in edit mode; resta solo "Indietro" + indicatore stato
+- Flag `initialized` (non `$state`) impostato con `setTimeout(fn, 0)` in `onMount` per evitare save sul mount iniziale
+
 ### Export MD giornata
 `GET /api/giornate/:id/export-md` → `text/markdown` con attachment.
 Contiene per ogni ricetta: tabella macronutrienti per ingrediente + micronutrienti per ingrediente + totali ricetta.
@@ -139,7 +148,7 @@ Il bottone **↓ Esporta .md** è visibile nell'header di `GiornataForm` solo in
   - **Giorno di Riposo**: M1–M5
   - **Allenamento Deficit**: M1, Pre-WO, Intra-WO, Post-WO, M4, M5
   - **Allenamento Surplus**: stessa struttura con carbs ridistribuiti
-- Persistenza in `localStorage` con chiave `dietplanner_fabbisogno_v1`; salvataggio **esplicito** tramite pulsante (non auto-save)
+- Persistenza su file server tramite `api.fabbisogno.save/load`; **auto-save** con debounce 600ms su ogni modifica (funzione `autoSave()` con flag `initialized`)
 - Sistema basato su: https://www.youtube.com/watch?v=ELxTSv-5Ykg&t=335s
 
 ### Campi numerici nel form ingrediente
