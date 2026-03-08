@@ -2,6 +2,12 @@
 
 A local web app to plan and track your personal diet. Manage ingredients, build recipes, and compose daily meal plans — with automatic nutritional calculations, micronutrient tracking, and grocery list export.
 
+## Screenshots
+
+| Daily meal plan | Grocery list |
+|---|---|
+| ![Daily meal plan](docs/screenshots/giornata.png) | ![Grocery list](docs/screenshots/lista_spesa.png) |
+
 ## What it does
 
 ### Ingredients
