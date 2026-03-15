@@ -1,7 +1,7 @@
 import { json } from "../router";
 import * as fs from "../services/fileService";
 import { computeRicettaDettaglio } from "../parsers/nutritionCalc";
-import { generateShoppingListHtml } from "../services/shoppingListService";
+import { generateShoppingListHtml, type RicettaExport } from "../services/shoppingListService";
 import type { ShoppingListInput, ShoppingListItem, Ingrediente } from "../types";
 
 export async function handleListaSpesa(req: Request, dataDir: string): Promise<Response> {
@@ -21,6 +21,9 @@ export async function handleListaSpesa(req: Request, dataDir: string): Promise<R
 
   // Map: ingredienteId → total grams
   const totali = new Map<string, number>();
+  // Ordered unique ricette for export
+  const ricetteOrdered: string[] = [];
+  const ricetteMap = new Map<string, { nome: string; preparazione: string; ingredienti: Array<{ nome: string; quantita: number; unita: string }> }>();
 
   for (const { giornataId, moltiplicatore } of body.selezione) {
     if (!moltiplicatore || moltiplicatore <= 0) continue;
@@ -37,6 +40,15 @@ export async function handleListaSpesa(req: Request, dataDir: string): Promise<R
         if (!d.pesoGrammi) continue;
         const current = totali.get(d.id) ?? 0;
         totali.set(d.id, current + d.pesoGrammi * moltiplicatore);
+      }
+
+      if (!ricetteMap.has(ricettaId)) {
+        ricetteOrdered.push(ricettaId);
+        ricetteMap.set(ricettaId, {
+          nome: ricetta.nome,
+          preparazione: ricetta.preparazione,
+          ingredienti: dettaglio.map((d) => ({ nome: d.nome, quantita: d.quantita, unita: d.unita })),
+        });
       }
     }
   }
@@ -72,7 +84,8 @@ export async function handleListaSpesa(req: Request, dataDir: string): Promise<R
   // Sort alphabetically
   items.sort((a, b) => a.nome.localeCompare(b.nome, "it"));
 
-  const html = generateShoppingListHtml(items);
+  const ricette: RicettaExport[] = ricetteOrdered.map((id) => ricetteMap.get(id)!);
+  const html = generateShoppingListHtml(items, ricette);
 
   return new Response(html, {
     headers: {
