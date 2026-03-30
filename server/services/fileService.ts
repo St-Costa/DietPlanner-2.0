@@ -5,7 +5,7 @@ import type {
   Ingrediente, IngredienteInput,
   Ricetta, RicettaInput,
   Giornata, GiornataInput,
-  ListaSpesa, ListaSpesaInput, ShoppingListItem, RicettaExport,
+  ListaSpesaRaw, ListaSpesaInput,
   EntityType,
 } from "../types";
 
@@ -237,38 +237,31 @@ export async function deleteGiornata(dataDir: string, id: string): Promise<boole
 
 // ─── Liste Spesa ────────────────────────────────────────────────────────────
 
-export async function listListeSpesa(dataDir: string): Promise<ListaSpesa[]> {
+export async function listListeSpesa(dataDir: string): Promise<ListaSpesaRaw[]> {
   const folder = folderPath(dataDir, "lista-spesa");
-  // Ensure directory exists
   await import("node:fs/promises").then((fs) => fs.mkdir(folder, { recursive: true }));
-  return listFiles<ListaSpesa>(dataDir, "lista-spesa");
+  return listFiles<ListaSpesaRaw>(dataDir, "lista-spesa");
 }
 
-export async function getListaSpesa(dataDir: string, id: string): Promise<ListaSpesa | null> {
-  const result = await getFile<ListaSpesa>(dataDir, "lista-spesa", id);
+export async function getListaSpesa(dataDir: string, id: string): Promise<ListaSpesaRaw | null> {
+  const result = await getFile<ListaSpesaRaw>(dataDir, "lista-spesa", id);
   return result?.data ?? null;
 }
 
 export async function createListaSpesa(
   dataDir: string,
   input: ListaSpesaInput,
-  items: ShoppingListItem[],
-  ricette: RicettaExport[],
-  costoTotale: number | null,
-): Promise<ListaSpesa> {
+): Promise<ListaSpesaRaw> {
   const nome = input.nome?.trim() ||
     `Lista spesa - ${new Date().toLocaleDateString("it-IT", { dateStyle: "long" })}`;
   const folder = folderPath(dataDir, "lista-spesa");
   await import("node:fs/promises").then((fs) => fs.mkdir(folder, { recursive: true }));
   const { slug } = await generateSlug(nome, "lista-spesa", dataDir);
   const now = new Date().toISOString();
-  const lista: ListaSpesa = {
+  const lista: ListaSpesaRaw = {
     id: slug,
     nome,
     selezione: input.selezione,
-    items,
-    ricette,
-    costoTotale,
     created_at: now,
     updated_at: now,
   };

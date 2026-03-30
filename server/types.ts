@@ -130,15 +130,20 @@ export interface RicettaExport {
   ingredienti: Array<{ nome: string; quantita: number; unita: string }>;
 }
 
-export interface ListaSpesa {
+/** Raw data saved to .md file — only selezione, no computed fields */
+export interface ListaSpesaRaw {
   id: string;
   nome: string;
   selezione: ShoppingListSelezione[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** Enriched with computed items/ricette/costo (calculated on read) */
+export interface ListaSpesa extends ListaSpesaRaw {
   items: ShoppingListItem[];
   ricette: RicettaExport[];
   costoTotale: number | null;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface ListaSpesaInput {

@@ -30,6 +30,22 @@ function createListeSpesaStore() {
     }
   });
 
+  // Ingredient, recipe, or giornata changes invalidate computed items
+  onMessage(async (msg) => {
+    if (!loaded) return;
+    if (
+      (msg.entity === "ingrediente" || msg.entity === "ricetta" || msg.entity === "giornata") &&
+      (msg.type === "file_changed" || msg.type === "file_deleted")
+    ) {
+      try {
+        const data = await api.listeSpesa.list();
+        set(data);
+      } catch (err) {
+        console.warn("[store/listeSpesa] upstream change reload failed:", err);
+      }
+    }
+  });
+
   return {
     subscribe,
     load: async () => {
