@@ -1,97 +1,51 @@
 import { json } from "../router";
 import * as fs from "../services/fileService";
-import { computeRicettaDettaglio } from "../parsers/nutritionCalc";
-import { generateShoppingListHtml, type RicettaExport } from "../services/shoppingListService";
-import type { ShoppingListInput, ShoppingListItem, Ingrediente } from "../types";
+import { computeShoppingList } from "../services/shoppingListService";
+import type { ListaSpesaInput } from "../types";
 
-export async function handleListaSpesa(req: Request, dataDir: string): Promise<Response> {
-  let body: ShoppingListInput;
-  try {
-    body = await req.json() as ShoppingListInput;
-  } catch {
-    return json({ error: "Invalid JSON" }, 400);
+export async function handleListeSpesa(req: Request, url: URL, dataDir: string): Promise<Response> {
+  const segments = url.pathname.split("/").filter(Boolean);
+  // segments: ["api", "liste-spesa"] or ["api", "liste-spesa", id]
+  const id = segments[2];
+
+  // GET /api/liste-spesa
+  if (req.method === "GET" && !id) {
+    const liste = await fs.listListeSpesa(dataDir);
+    liste.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return json(liste);
   }
 
-  if (!Array.isArray(body.selezione) || body.selezione.length === 0) {
-    return json({ error: "selezione deve contenere almeno una giornata" }, 400);
+  // GET /api/liste-spesa/:id
+  if (req.method === "GET" && id) {
+    const lista = await fs.getListaSpesa(dataDir, id);
+    if (!lista) return json({ error: "Not found" }, 404);
+    return json(lista);
   }
 
-  const allIng = await fs.listIngredienti(dataDir);
-  const ingMap = new Map<string, Ingrediente>(allIng.map((i) => [i.id, i]));
-
-  // Map: ingredienteId → total grams
-  const totali = new Map<string, number>();
-  // Ordered unique ricette for export
-  const ricetteOrdered: string[] = [];
-  const ricetteMap = new Map<string, { nome: string; preparazione: string; ingredienti: Array<{ nome: string; quantita: number; unita: string }> }>();
-
-  for (const { giornataId, moltiplicatore } of body.selezione) {
-    if (!moltiplicatore || moltiplicatore <= 0) continue;
-
-    const giornata = await fs.getGiornata(dataDir, giornataId);
-    if (!giornata) continue;
-
-    for (const ricettaId of giornata.ricette) {
-      const ricetta = await fs.getRicetta(dataDir, ricettaId);
-      if (!ricetta) continue;
-
-      const { dettaglio } = computeRicettaDettaglio(ricetta.ingredienti, ingMap);
-      for (const d of dettaglio) {
-        if (!d.pesoGrammi) continue;
-        const current = totali.get(d.id) ?? 0;
-        totali.set(d.id, current + d.pesoGrammi * moltiplicatore);
-      }
-
-      if (!ricetteMap.has(ricettaId)) {
-        ricetteOrdered.push(ricettaId);
-        ricetteMap.set(ricettaId, {
-          nome: ricetta.nome,
-          preparazione: ricetta.preparazione,
-          ingredienti: dettaglio.map((d) => ({ nome: d.nome, quantita: d.quantita, unita: d.unita })),
-        });
-      }
+  // POST /api/liste-spesa
+  if (req.method === "POST" && !id) {
+    let body: ListaSpesaInput;
+    try {
+      body = await req.json() as ListaSpesaInput;
+    } catch {
+      return json({ error: "Invalid JSON" }, 400);
     }
+
+    if (!Array.isArray(body.selezione) || body.selezione.length === 0) {
+      return json({ error: "selezione deve contenere almeno una giornata" }, 400);
+    }
+
+    const { items, ricette, costoTotale } = await computeShoppingList(body.selezione, dataDir);
+    const lista = await fs.createListaSpesa(dataDir, body, items, ricette, costoTotale);
+    return json(lista, 201);
   }
 
-  // Build shopping list items
-  const items: ShoppingListItem[] = [];
-  for (const [id, totaleGrammi] of totali) {
-    const ing = ingMap.get(id);
-    if (!ing) continue;
-
-    const totaleUnita =
-      ing.peso_unita
-        ? Math.round((totaleGrammi / ing.peso_unita) * 100) / 100
-        : null;
-
-    const costoTotale =
-      ing.costo && totaleUnita !== null
-        ? Math.round(ing.costo * totaleUnita * 100) / 100
-        : null;
-
-    items.push({
-      ingredienteId: id,
-      nome: ing.nome,
-      totaleGrammi: Math.round(totaleGrammi * 100) / 100,
-      nome_unita: ing.nome_unita,
-      peso_unita: ing.peso_unita,
-      totaleUnita,
-      costo: ing.costo,
-      costoTotale,
-    });
+  // DELETE /api/liste-spesa/:id
+  if (req.method === "DELETE" && id) {
+    const deleted = await fs.deleteListaSpesa(dataDir, id);
+    if (!deleted) return json({ error: "Not found" }, 404);
+    return json({ ok: true });
   }
 
-  // Sort alphabetically
-  items.sort((a, b) => a.nome.localeCompare(b.nome, "it"));
-
-  const ricette: RicettaExport[] = ricetteOrdered.map((id) => ricetteMap.get(id)!);
-  const html = generateShoppingListHtml(items, ricette);
-
-  return new Response(html, {
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="lista-spesa.html"',
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
+  return json({ error: "Method not allowed" }, 405);
 }

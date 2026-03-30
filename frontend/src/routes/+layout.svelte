@@ -18,6 +18,7 @@
   <a href="/ingredienti">Ingredienti</a>
   <a href="/ricette">Ricette</a>
   <a href="/giornate">Giornate</a>
+  <a href="/liste-spesa">Liste Spesa</a>
   <a href="/fabbisogno">Fabbisogno</a>
   <div class="ws-indicator" title={statusTitle}>
     <span class="dot" style="background:{statusColor}"></span>

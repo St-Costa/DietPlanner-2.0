@@ -5,6 +5,7 @@ const FOLDER_MAP = {
   ingrediente: "Ingredienti",
   ricetta: "Ricette",
   giornata: "Giornate",
+  "lista-spesa": "ListeSpesa",
 } as const;
 
 export function slugify(nome: string): string {

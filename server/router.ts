@@ -1,7 +1,7 @@
 import { handleIngredienti } from "./handlers/ingredienti";
 import { handleRicette } from "./handlers/ricette";
 import { handleGiornate } from "./handlers/giornate";
-import { handleListaSpesa } from "./handlers/listaSpesa";
+import { handleListeSpesa } from "./handlers/listaSpesa";
 import { handleScrapeIngrediente } from "./handlers/scraper";
 import { handleFabbisogno } from "./handlers/fabbisogno";
 
@@ -41,8 +41,8 @@ export async function router(req: Request, dataDir: string): Promise<Response> {
     if (path.startsWith("/api/giornate")) {
       return await handleGiornate(req, url, dataDir);
     }
-    if (path === "/api/lista-spesa" && req.method === "POST") {
-      return await handleListaSpesa(req, dataDir);
+    if (path.startsWith("/api/liste-spesa")) {
+      return await handleListeSpesa(req, url, dataDir);
     }
     if (path === "/api/scrape-ingrediente") {
       return await handleScrapeIngrediente(req);
@@ -66,7 +66,7 @@ export async function router(req: Request, dataDir: string): Promise<Response> {
 async function handleSlugify(url: URL, dataDir: string): Promise<Response> {
   const { generateSlug } = await import("./services/slugService");
   const nome = url.searchParams.get("nome") ?? "";
-  const tipo = url.searchParams.get("tipo") as "ingrediente" | "ricetta" | "giornata" | null;
+  const tipo = url.searchParams.get("tipo") as "ingrediente" | "ricetta" | "giornata" | "lista-spesa" | null;
   if (!nome || !tipo) {
     return json({ error: "Missing nome or tipo param" }, 400);
   }

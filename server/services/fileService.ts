@@ -5,6 +5,7 @@ import type {
   Ingrediente, IngredienteInput,
   Ricetta, RicettaInput,
   Giornata, GiornataInput,
+  ListaSpesa, ListaSpesaInput, ShoppingListItem, RicettaExport,
   EntityType,
 } from "../types";
 
@@ -12,6 +13,7 @@ const FOLDER_MAP: Record<EntityType, string> = {
   ingrediente: "Ingredienti",
   ricetta: "Ricette",
   giornata: "Giornate",
+  "lista-spesa": "ListeSpesa",
 };
 
 function folderPath(dataDir: string, tipo: EntityType): string {
@@ -227,6 +229,56 @@ export async function updateGiornata(
 
 export async function deleteGiornata(dataDir: string, id: string): Promise<boolean> {
   const fp = filePath(dataDir, "giornata", id);
+  const file = Bun.file(fp);
+  if (!(await file.exists())) return false;
+  await import("node:fs/promises").then((fs) => fs.unlink(fp));
+  return true;
+}
+
+// ─── Liste Spesa ────────────────────────────────────────────────────────────
+
+export async function listListeSpesa(dataDir: string): Promise<ListaSpesa[]> {
+  const folder = folderPath(dataDir, "lista-spesa");
+  // Ensure directory exists
+  await import("node:fs/promises").then((fs) => fs.mkdir(folder, { recursive: true }));
+  return listFiles<ListaSpesa>(dataDir, "lista-spesa");
+}
+
+export async function getListaSpesa(dataDir: string, id: string): Promise<ListaSpesa | null> {
+  const result = await getFile<ListaSpesa>(dataDir, "lista-spesa", id);
+  return result?.data ?? null;
+}
+
+export async function createListaSpesa(
+  dataDir: string,
+  input: ListaSpesaInput,
+  items: ShoppingListItem[],
+  ricette: RicettaExport[],
+  costoTotale: number | null,
+): Promise<ListaSpesa> {
+  const nome = input.nome?.trim() ||
+    `Lista spesa - ${new Date().toLocaleDateString("it-IT", { dateStyle: "long" })}`;
+  const folder = folderPath(dataDir, "lista-spesa");
+  await import("node:fs/promises").then((fs) => fs.mkdir(folder, { recursive: true }));
+  const { slug } = await generateSlug(nome, "lista-spesa", dataDir);
+  const now = new Date().toISOString();
+  const lista: ListaSpesa = {
+    id: slug,
+    nome,
+    selezione: input.selezione,
+    items,
+    ricette,
+    costoTotale,
+    created_at: now,
+    updated_at: now,
+  };
+  const fp = filePath(dataDir, "lista-spesa", slug);
+  await writeFile(fp, lista as unknown as Record<string, unknown>, "");
+  return lista;
+}
+
+export async function deleteListaSpesa(dataDir: string, id: string): Promise<boolean> {
+  const fp = filePath(dataDir, "lista-spesa", id);
   const file = Bun.file(fp);
   if (!(await file.exists())) return false;
   await import("node:fs/promises").then((fs) => fs.unlink(fp));

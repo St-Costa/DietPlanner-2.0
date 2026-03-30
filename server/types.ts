@@ -124,9 +124,31 @@ export interface ShoppingListItem {
   costoTotale: number | null;
 }
 
+export interface RicettaExport {
+  nome: string;
+  preparazione: string;
+  ingredienti: Array<{ nome: string; quantita: number; unita: string }>;
+}
+
+export interface ListaSpesa {
+  id: string;
+  nome: string;
+  selezione: ShoppingListSelezione[];
+  items: ShoppingListItem[];
+  ricette: RicettaExport[];
+  costoTotale: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListaSpesaInput {
+  nome?: string;
+  selezione: ShoppingListSelezione[];
+}
+
 // ─── WebSocket ────────────────────────────────────────────────────────────────
 
-export type WSEntity = "ingrediente" | "ricetta" | "giornata";
+export type WSEntity = "ingrediente" | "ricetta" | "giornata" | "lista-spesa";
 export type WSType = "file_changed" | "file_created" | "file_deleted" | "connected";
 
 export interface WSMessage {
@@ -138,7 +160,7 @@ export interface WSMessage {
 
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 
-export type EntityType = "ingrediente" | "ricetta" | "giornata";
+export type EntityType = "ingrediente" | "ricetta" | "giornata" | "lista-spesa";
 
 export interface SlugifyResponse {
   slug: string;

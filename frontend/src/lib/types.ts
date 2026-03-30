@@ -90,11 +90,44 @@ export interface ShoppingListSelezione {
   moltiplicatore: number;
 }
 
+export interface ShoppingListItem {
+  ingredienteId: string;
+  nome: string;
+  totaleGrammi: number;
+  nome_unita: string | null;
+  peso_unita: number | null;
+  totaleUnita: number | null;
+  costo: number | null;
+  costoTotale: number | null;
+}
+
+export interface RicettaExport {
+  nome: string;
+  preparazione: string;
+  ingredienti: Array<{ nome: string; quantita: number; unita: string }>;
+}
+
+export interface ListaSpesa {
+  id: string;
+  nome: string;
+  selezione: ShoppingListSelezione[];
+  items: ShoppingListItem[];
+  ricette: RicettaExport[];
+  costoTotale: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListaSpesaInput {
+  nome?: string;
+  selezione: ShoppingListSelezione[];
+}
+
 export type WSType = "file_changed" | "file_created" | "file_deleted" | "connected";
 
 export interface WSMessage {
   type: WSType;
-  entity: "ingrediente" | "ricetta" | "giornata";
+  entity: "ingrediente" | "ricetta" | "giornata" | "lista-spesa";
   id: string;
   timestamp: string;
 }

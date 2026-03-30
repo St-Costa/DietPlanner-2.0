@@ -34,6 +34,7 @@ function pathToEntity(filePath: string): { entity: WSEntity; id: string } | null
   if (folder === "Ingredienti") return { entity: "ingrediente", id };
   if (folder === "Ricette") return { entity: "ricetta", id };
   if (folder === "Giornate") return { entity: "giornata", id };
+  if (folder === "ListeSpesa") return { entity: "lista-spesa", id };
   return null;
 }
 

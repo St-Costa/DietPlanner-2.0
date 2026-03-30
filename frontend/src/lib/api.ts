@@ -2,7 +2,8 @@ import type {
   Ingrediente, IngredienteInput,
   RicettaFull, RicettaInput,
   GiornataFull, GiornataInput,
-  ShoppingListSelezione, SlugifyResponse,
+  ListaSpesa, ListaSpesaInput,
+  SlugifyResponse,
   ScrapeResult,
 } from "./types";
 
@@ -98,15 +99,12 @@ export const api = {
       request<{ ok: true }>("/api/fabbisogno", { method: "PUT", body: JSON.stringify(data) }),
   },
 
-  listaSpesa: {
-    genera: async (selezione: ShoppingListSelezione[]): Promise<string> => {
-      const res = await fetch("/api/lista-spesa", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ selezione }),
-      });
-      if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => ({})));
-      return res.text();
-    },
+  listeSpesa: {
+    list: () => request<ListaSpesa[]>("/api/liste-spesa"),
+    get: (id: string) => request<ListaSpesa>(`/api/liste-spesa/${id}`),
+    create: (body: ListaSpesaInput) =>
+      request<ListaSpesa>("/api/liste-spesa", { method: "POST", body: JSON.stringify(body) }),
+    delete: (id: string) =>
+      request<{ ok: true }>(`/api/liste-spesa/${id}`, { method: "DELETE" }),
   },
 };
